@@ -8,6 +8,7 @@ var bodyParser = require('body-parser');
 var passport = require('passport');
 var LocalStrategy = require('passport-local');
 var mongoose = require('mongoose');
+var axios = require('axios');
 var connect = process.env.MONGODB_URI;
 
 var RtmClient = require('@slack/client').RtmClient;
@@ -54,7 +55,36 @@ rtm.on(CLIENT_EVENTS.RTM.RTM_CONNECTION_OPENED, function () {
 
 rtm.start();
 rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
-  rtm.sendMessage(message.text, channel);
+  console.log('MESSAGE', message);
+  axios({
+    method: 'post',
+    url: 'https://api.api.ai/v1/query?v=20150910',
+    headers: {
+      "Authorization": "Bearer a53d802617124f92b9a6d63c76dd2d08",
+      "Content-Type": "application/json; charset=utf-8"
+    },
+    data: {
+      query: message.text,
+      // context: [{
+      //     name: "weather",
+      //     lifespan: 4
+      // }],
+      // location: {
+      //     latitude: 37.459157,
+      //     longitude: -122.17926
+      // },
+      // timezone: "America/New_York",
+      lang: "en",
+      sessionId: message.user
+    }
+  })
+  .then(function (response) {
+    console.log('DATA', response);
+    rtm.sendMessage(response.data.result.fulfillment.speech, message.channel);
+  })
+  .catch(function (error) {
+    console.log(error);
+  });
 });
 
 // rtm.on(RTM_EVENTS.REACTION_ADDED, function handleRtmReactionAdded(reaction) {
