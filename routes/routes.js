@@ -10,11 +10,6 @@ router.get('/', function(req, res, next) {
   res.render('home');
 });
 
-router.post('/interactive', (req, res) => {
-  console.log('IN RESPONSE');
-  res.json({ interactive: true });
-})
-
 ///////////////////////////// END OF PUBLIC ROUTES /////////////////////////////
 
 router.use(function(req, res, next){
@@ -33,6 +28,14 @@ router.get('/protected', function(req, res, next) {
     username: req.user.username,
   });
 });
+
+router.post('/interactive', (req, res) => {
+  console.log('IN RESPONSE');
+  res.json({ interactive: true });
+})
+
+
+
 
 ///////////////////////////// END OF PRIVATE ROUTES /////////////////////////////
 
