@@ -10,8 +10,10 @@ var LocalStrategy = require('passport-local');
 var mongoose = require('mongoose');
 var connect = process.env.MONGODB_URI;
 
-var rtm = require('./server/slack.js');
+var rtm = require('./server/slack.js').rtm;
 rtm.start();
+var web = require('./server/slack.js').web;
+// web.start();
 
 var REQUIRED_ENV = "SLACK_SECRET MONGODB_URI".split(" ");
 
