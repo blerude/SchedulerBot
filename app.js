@@ -10,9 +10,8 @@ var LocalStrategy = require('passport-local');
 var mongoose = require('mongoose');
 var connect = process.env.MONGODB_URI;
 
-var RtmClient = require('@slack/client').RtmClient;
-var RTM_EVENTS = require('@slack/client').RTM_EVENTS;
-var CLIENT_EVENTS = require('@slack/client').CLIENT_EVENTS;
+var rtm = require('./server/slack.js');
+rtm.start();
 
 var REQUIRED_ENV = "SLACK_SECRET MONGODB_URI".split(" ");
 
@@ -31,40 +30,6 @@ var models = require('./models');
 var routes = require('./routes/routes');
 var auth = require('./routes/auth');
 var app = express();
-
-/**
- * Example for creating and working with the Slack RTM API.
- */
-
-/* eslint no-console:0 */
-var token = process.env.SLACK_API_TOKEN || '';
-
-var rtm = new RtmClient(token, { logLevel: 'debug' });
-let channel;
-// The client will emit an RTM.AUTHENTICATED event on successful connection, with the `rtm.start` payload
-rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
-  for (const c of rtmStartData.channels) {
-	  if (c.name ==='general') { channel = c.id }
-  }
-  console.log(`Logged in as ${rtmStartData.self.name} of team ${rtmStartData.team.name}, but not yet connected to a channel`);
-});
-rtm.on(CLIENT_EVENTS.RTM.RTM_CONNECTION_OPENED, function () {
-  rtm.sendMessage("SchedulerBot is on duty!", channel);
-});
-
-rtm.start();
-rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
-  rtm.sendMessage(message.text, channel);
-});
-
-// rtm.on(RTM_EVENTS.REACTION_ADDED, function handleRtmReactionAdded(reaction) {
-//   console.log('Reaction added:', reaction);
-// });
-// rtm.on(RTM_EVENTS.REACTION_REMOVED, function handleRtmReactionRemoved(reaction) {
-//   console.log('Reaction removed:', reaction);
-// });
-
-
 
 // view engine setup
 var hbs = require('express-handlebars')({
