@@ -26,7 +26,9 @@ router.get('/googleoauth', (req, res) => {
       'https://www.googleapis.com/auth/plus.me'
     ],
     state: encodeURIComponent(JSON.stringify({
-      auth_id: req.query.auth_id
+      auth_id: req.query.auth_id,
+      subject: req.query.subject,
+      date: req.query.date
     }))
   });
   console.log('URL', url);
@@ -47,16 +49,19 @@ router.get('/', (req, res) => {
           user.save()
             .then(user => {
               console.log('SAVED', user);
+              var state = JSON.parse(decodeURIComponent(req.query.state));
+              var startDate = new Date(state.date).getTime();
+              var endDate = startDate + (24 * 60 * 60 * 1000);
               var event = {
-                summary: 'Google I/O 2017',
-                location: '800 Howard St., San Francisco, CA 94103',
-                description: 'A chance to hear more about Google\'s developer products.',
+                summary: state.subject,
+                // location: '800 Howard St., San Francisco, CA 94103',
+                // description: 'A chance to hear more about Google\'s developer products.',
                 start: {
-                  dateTime: '2017-08-03T09:00:00-07:00',
+                  dateTime: new Date(startDate),
                   timeZone: 'America/Los_Angeles'
                 },
                 end: {
-                  dateTime: '2017-08-04T17:00:00-07:00',
+                  dateTime: new Date(endDate),
                   timeZone: 'America/Los_Angeles'
                 }
               };
@@ -72,6 +77,7 @@ router.get('/', (req, res) => {
                   return;
                 }
                 console.log('Event created: %s', e.htmlLink);
+                res.redirect('https://calendar.google.com/calendar');
               });
             })
         })
@@ -96,8 +102,12 @@ router.post('/interactive', (req, res) => {
         date: pending.date,
         user: messager._id
       }).save()
-      console.log('CONFIRMED');
-      res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}`);
+      console.log('CONFIRMED', pending);
+      // if (messager.tokens) {
+      //   res.redirect('http://localhost:3000/');
+      // } else {
+      res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${pending.subject}&date=${pending.date}`);
+      // }
     }
     messager.pending = '';
     messager.save();
