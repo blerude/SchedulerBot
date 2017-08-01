@@ -33,11 +33,6 @@ var models = require('./models');
 var routes = require('./routes/routes');
 var app = express();
 
-<<<<<<< HEAD
-
-
-=======
->>>>>>> blerude
 // view engine setup
 var hbs = require('express-handlebars')({
   defaultLayout: 'main',
@@ -127,7 +122,7 @@ app.use(function(err, req, res, next) {
   });
 });
 
-var port = process.env.PORT || 4567;
+var port = process.env.PORT || 3000;
 app.listen(port);
 console.log('Express started. Listening on port %s', port);
 
