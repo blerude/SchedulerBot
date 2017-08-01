@@ -11,10 +11,15 @@ var tomorrow = currDay.getDate() + 1;
 var month = today.getMonth();
 var todayFind = `${year}-${month}-${today}`
 var tomorrowFind = `${year}-${month}-${tomorrow}`
-Reminder.findBy({date:dateToFind})
+Reminder.findBy({date:todayFind})
 .populate('User')
 .exec(function(err,reminder){
-  
+  //im guessing we do something with
+  reminder.user.slackId
 })
+Reminder.findBy({date:tomorrowFind})
+.populate('User')
+.exec(function(err,reminder){
 
+})
 module.exports = cronjob;
