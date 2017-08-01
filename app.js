@@ -34,38 +34,7 @@ var routes = require('./routes/routes');
 var auth = require('./routes/auth');
 var app = express();
 
-rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
-  console.log('MESSAGE', message);
-  axios({
-    method: 'post',
-    url: 'https://api.api.ai/v1/query?v=20150910',
-    headers: {
-      "Authorization": "Bearer a53d802617124f92b9a6d63c76dd2d08",
-      "Content-Type": "application/json; charset=utf-8"
-    },
-    data: {
-      query: message.text,
-      // context: [{
-      //     name: "weather",
-      //     lifespan: 4
-      // }],
-      // location: {
-      //     latitude: 37.459157,
-      //     longitude: -122.17926
-      // },
-      // timezone: "America/New_York",
-      lang: "en",
-      sessionId: message.user
-    }
-  })
-  .then(function (response) {
-    console.log('DATA', response);
-    rtm.sendMessage(response.data.result.fulfillment.speech, message.channel);
-  })
-  .catch(function (error) {
-    console.log(error);
-  });
-});
+
 
 // view engine setup
 var hbs = require('express-handlebars')({
