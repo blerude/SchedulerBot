@@ -33,17 +33,6 @@ var models = require('./models');
 var routes = require('./routes/routes');
 var app = express();
 
-<<<<<<< HEAD
-/**
- * Example for creating and working with the Slack RTM API.
- */
-
-/* eslint no-console:0 */
-
-
-
-=======
->>>>>>> blerude
 // view engine setup
 var hbs = require('express-handlebars')({
   defaultLayout: 'main',
