@@ -55,16 +55,22 @@ router.get('/', (req, res) => {
 // });
 router.post('/interactive', (req, res) => {
   var string = JSON.parse(req.body.payload);
+  console.log(req)
   User.findOne({slackId: string.user.id}, function(err, messager) {
-    console.log('messager: ', messager)
+    if (string.actions[0].value === 'cancel') {
+      res.send('Scheduler cancelled');
+    } else {
+      var pending = JSON.parse(messager.pending)
+      new Reminder({
+        subject: pending.subject,
+        date: pending.date,
+        user: messager._id
+      }).save()
+      res.send('Meeting confirmed!')
+    }
     messager.pending = '';
     messager.save();
   })
-  if (string.actions[0].value === 'cancel') {
-    res.send('Scheduler cancelled');
-  } else {
-    res.send('Meeting confirmed!')
-  }
 })
 
 

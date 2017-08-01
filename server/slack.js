@@ -4,6 +4,7 @@ var CLIENT_EVENTS = require('@slack/client').CLIENT_EVENTS;
 var WebClient = require('@slack/client').WebClient;
 var axios = require('axios')
 var User = require('../models.js').User;
+var Reminder = require('../models.js').Reminder;
 
 /*
  * Example for creating and working with the Slack RTM API.
@@ -58,8 +59,8 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
           //   console.log('Message denied.');
           // }
         })
-      } else if (!sentUser.googleCalendarAccount) {
-        console.log("authorization")
+      // } else if (!sentUser.googleCalendarAccount) {
+      //   console.log("authorization")
       } else {
         axios({
           method: 'post',
@@ -88,9 +89,12 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
             User.findOne({ slackId: message.user }, function(err, foundUser) {
               if (err) {
                 console.log(err)
-              } else {
-                foundUser.pending = response.data.result.resolvedQuery;
-              }
+              } else if (!foundUser.pending) {
+                foundUser.pending = JSON.stringify({
+                  subject: response.data.result.parameters.subject,
+                  date: response.data.result.parameters.date
+                });
+              } 
               foundUser.save()
               .then(resp2 => {
                 // console.log('response2: ', resp2)
