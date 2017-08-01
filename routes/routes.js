@@ -96,8 +96,12 @@ router.post('/interactive', (req, res) => {
         date: pending.date,
         user: messager._id
       }).save()
-      console.log('CONFIRMED');
-      res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}`);
+      console.log('CONFIRMED', messager);
+      if (messager.googleCalendarAccount) {
+        res.send('Reminder confirmed!');
+      } else {
+        res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}`);
+      }
     }
     messager.pending = '';
     messager.save();
