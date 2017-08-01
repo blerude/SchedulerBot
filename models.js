@@ -10,10 +10,16 @@ var userSchema = mongoose.Schema({
   tokens: Object
 });
 
-
+var reminderSchema =  mongoose.Schema({
+  subject:String,
+  date:String,
+  user: { type: Schema.Types.ObjectId, ref: 'User' }
+})
 
 User = mongoose.model('User', userSchema);
+Reminder = mongoose.model('Reminder', reminderSchema);
 
 module.exports = {
-    User: User
+    User: User,
+  Reminder:Reminder
 };
