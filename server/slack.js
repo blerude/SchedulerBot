@@ -2,7 +2,11 @@ var RtmClient = require('@slack/client').RtmClient;
 var RTM_EVENTS = require('@slack/client').RTM_EVENTS;
 var CLIENT_EVENTS = require('@slack/client').CLIENT_EVENTS;
 var WebClient = require('@slack/client').WebClient;
+<<<<<<< HEAD
 var axios = require('axios');
+=======
+var axios = require('axios')
+>>>>>>> blerude
 
 /**
  * Example for creating and working with the Slack RTM API.
@@ -21,22 +25,15 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
 	  if (c.name === 'general') { channel = c.id }
   }
 
-  web.chat.postMessage(channel, 'Hello there', function(err, res) {
-    if (err) {
-      console.log('Error:', err);
-    } else {
-      console.log('Message sent interactive: ', res);
-    }
-  })
-
   console.log(`Logged in as ${rtmStartData.self.name} of team ${rtmStartData.team.name}, but not yet connected to a channel`);
 })
 
-rtm.on(CLIENT_EVENTS.RTM.RTM_CONNECTION_OPENED, function () {
-  rtm.sendMessage("SchedulerBot at your service!", channel);
-});
+// rtm.on(CLIENT_EVENTS.RTM.RTM_CONNECTION_OPENED, function () {
+//   rtm.sendMessage("SchedulerBot at your service!", channel);
+// });
 
 rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
+<<<<<<< HEAD
   console.log('MESSAGE', message);
   axios({
     method: 'post',
@@ -67,6 +64,79 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
   .catch(function (error) {
     console.log(error);
   });
+=======
+  if (!message.subtype) {
+    console.log('MESSAGE', message);
+    axios({
+      method: 'post',
+      url: 'https://api.api.ai/v1/query?v=20150910',
+      headers: {
+        "Authorization": "Bearer a53d802617124f92b9a6d63c76dd2d08",
+        "Content-Type": "application/json; charset=utf-8"
+      },
+      data: {
+        query: message.text,
+        // context: [{
+        //     name: "weather",
+        //     lifespan: 4
+        // }],
+        // location: {
+        //     latitude: 37.459157,
+        //     longitude: -122.17926
+        // },
+        // timezone: "America/New_York",
+        lang: "en",
+        sessionId: message.user
+      }
+    })
+    .then(function (response) {
+      console.log(response)
+      if (!response.data.result.actionIncomplete) {
+
+        var interactive = {
+          text: response.data.result.fulfillment.speech,
+          attachments: [
+            {
+              text: "Is this correct?",
+              fallback: "You could not confirm your meeting",
+              callback_id: "wopr_game",
+              color: "#3AA3E3",
+              attachment_type: "default",
+              actions: [
+                {
+                  name: "confim",
+                  text: "Yes",
+                  type: "button",
+                  value: "yes"
+                },
+                {
+                  name: "confirm",
+                  text: "Cancel",
+                  type: "button",
+                  value: "cancel"
+                }
+              ]
+            }
+          ]
+        }
+      } else {
+        var interactive = {
+          text: response.data.result.fulfillment.speech,
+        };
+      }
+      web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+        if (err) {
+          console.log('Error:', err);
+        } else {
+          console.log('Message sent interactive: ', res);
+        }
+      })
+    })
+    .catch(function (error) {
+      console.log(error);
+    });
+  }
+>>>>>>> blerude
 });
 
 // rtm.on(RTM_EVENTS.REACTION_ADDED, function handleRtmReactionAdded(reaction) {

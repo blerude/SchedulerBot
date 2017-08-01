@@ -31,11 +31,13 @@ mongoose.connect(connect);
 var models = require('./models');
 
 var routes = require('./routes/routes');
-var auth = require('./routes/auth');
 var app = express();
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> blerude
 // view engine setup
 var hbs = require('express-handlebars')({
   defaultLayout: 'main',
@@ -92,7 +94,6 @@ passport.use(new LocalStrategy(function(username, password, done) {
 }
 ));
 
-app.use('/', auth(passport));
 app.use('/', routes);
 
 // catch 404 and forward to error handler
@@ -126,7 +127,7 @@ app.use(function(err, req, res, next) {
   });
 });
 
-var port = process.env.PORT || 3000;
+var port = process.env.PORT || 4567;
 app.listen(port);
 console.log('Express started. Listening on port %s', port);
 
