@@ -85,14 +85,23 @@ router.get('/', (req, res) => {
 router.post('/interactive', (req, res) => {
   console.log('IN INTERACTIVE');
   var string = JSON.parse(req.body.payload);
-  console.log('USERID', string.user.id);;
-  if (string.actions[0].value === 'cancel') {
-    console.log('CANCELLED');
-    res.send('Scheduler cancelled');
-  } else {
-    console.log('CONFIRMED');
-    res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}`);
-  }
+  console.log(req)
+  User.findOne({slackId: string.user.id}, function(err, messager) {
+    if (string.actions[0].value === 'cancel') {
+      res.send('Scheduler cancelled');
+    } else {
+      var pending = JSON.parse(messager.pending)
+      new Reminder({
+        subject: pending.subject,
+        date: pending.date,
+        user: messager._id
+      }).save()
+      console.log('CONFIRMED');
+      res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}`);
+    }
+    messager.pending = '';
+    messager.save();
+  })
 })
 
 
