@@ -91,7 +91,6 @@ router.get('/', (req, res) => {
 router.post('/interactive', (req, res) => {
   console.log('IN INTERACTIVE');
   var string = JSON.parse(req.body.payload);
-  console.log(req)
   User.findOne({slackId: string.user.id}, function(err, messager) {
     if (string.actions[0].value === 'cancel') {
       res.send('Scheduler cancelled');

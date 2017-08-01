@@ -20,6 +20,21 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
   for (const c of rtmStartData.channels) {
       if (c.name === 'general') { channel = c.id }
   }
+
+  console.log('RTMSTARTDATA', rtmStartData);
+
+  var today = new Date().getTime();
+  var tomorrow = today + (1000 * 60 * 60 * 24)
+  Reminder.find({}, function(err, reminders) {
+    reminders.forEach(rem => {
+      if (new Date(rem.date).getTime() > today && new Date(rem.date).getTime() < tomorrow) {
+        var msg = 'Reminder: You have to ' + rem.subject + ' soon!'
+        console.log('hey ' + msg)
+        web.chat.postMessage(channel, msg)
+      }
+    })
+  })
+
   var users = rtmStartData.users;
   users.forEach(user => {
     User.findOne({slackId: user.id}, function(err, foundUser) {
