@@ -6,9 +6,14 @@ var User = models.User;
 //////////////////////////////// PUBLIC ROUTES ////////////////////////////////
 // Users who are not logged in can see these routes
 
-router.get('/', function(req, res, next) {
-  res.render('home');
-});
+router.post('/interactive', (req, res) => {
+  var string = JSON.parse(req.body.payload);
+  if (string.actions[0].value === 'cancel') {
+    res.send('Scheduler cancelled');
+  } else {
+    res.send('Meeting confirmed!')
+  }
+})
 
 ///////////////////////////// END OF PUBLIC ROUTES /////////////////////////////
 
@@ -28,14 +33,6 @@ router.get('/protected', function(req, res, next) {
     username: req.user.username,
   });
 });
-
-router.post('/interactive', (req, res) => {
-  console.log('IN RESPONSE');
-  res.json({ interactive: true });
-})
-
-
-
 
 ///////////////////////////// END OF PRIVATE ROUTES /////////////////////////////
 
