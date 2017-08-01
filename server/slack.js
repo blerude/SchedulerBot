@@ -5,7 +5,7 @@ var WebClient = require('@slack/client').WebClient;
 var axios = require('axios')
 var User = require('../models.js').User;
 
-/**
+/*
  * Example for creating and working with the Slack RTM API.
  */
 
