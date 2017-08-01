@@ -2,7 +2,8 @@ var RtmClient = require('@slack/client').RtmClient;
 var RTM_EVENTS = require('@slack/client').RTM_EVENTS;
 var CLIENT_EVENTS = require('@slack/client').CLIENT_EVENTS;
 var WebClient = require('@slack/client').WebClient;
-var axios = require('axios')
+var axios = require('axios');
+// var gapi = require('gapi');
 
 /**
  * Example for creating and working with the Slack RTM API.
@@ -29,8 +30,8 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
 // });
 
 rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
+  console.log('USER', message.user);
   if (!message.subtype) {
-    console.log('MESSAGE', message);
     axios({
       method: 'post',
       url: 'https://api.api.ai/v1/query?v=20150910',
@@ -40,28 +41,19 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
       },
       data: {
         query: message.text,
-        // context: [{
-        //     name: "weather",
-        //     lifespan: 4
-        // }],
-        // location: {
-        //     latitude: 37.459157,
-        //     longitude: -122.17926
-        // },
-        // timezone: "America/New_York",
         lang: "en",
         sessionId: message.user
       }
     })
     .then(function (response) {
-      console.log(response)
-      if (!response.data.result.actionIncomplete) {
+      console.log('RESPONSE', response.data.result);
+      if (!response.data.result.actionIncomplete && Object.keys(response.data.result.parameters).length !== 0) {
 
         var interactive = {
           text: response.data.result.fulfillment.speech,
           attachments: [
             {
-              text: "Is this correct?",
+              text: `Is this correct <@${message.user}>?`,
               fallback: "You could not confirm your meeting",
               callback_id: "wopr_game",
               color: "#3AA3E3",
