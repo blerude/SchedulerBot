@@ -24,12 +24,12 @@ var addEvent = (subject, start, end) => {
     // location: '800 Howard St., San Francisco, CA 94103',
     // description: 'A chance to hear more about Google\'s developer products.',
     start: {
-      dateTime: new Date(start),
-      timeZone: 'America/Los_Angeles'
+      dateTime: new Date(start)
+      // timeZone: 'America/New_York'
     },
     end: {
-      dateTime: new Date(end),
-      timeZone: 'America/Los_Angeles'
+      dateTime: new Date(end)
+      // timeZone: 'America/New_York'
     }
   };
 
@@ -64,8 +64,10 @@ router.get('/googleoauth', (req, res) => {
     ],
     state: encodeURIComponent(JSON.stringify({
       auth_id: req.query.auth_id,
-      subject: req.query.subject,
-      date: req.query.date
+      subject: req.query.subject || 'Meeting',
+      date: req.query.date,
+      time: req.query.time,
+      invitees: req.query.invitees
     }))
   });
   console.log('URL', url);
@@ -76,11 +78,18 @@ router.get('/googleauth/callback', (req, res) => {
   // console.log('AFTER FUNCTION', JSON.parse(decodeURIComponent(req.query.state)));
 
   if (!req.query.state) {
+    console.log('BEFORE PARSE', req.query.tokens);
     console.log('AUTHORIZED', JSON.parse(req.query.tokens));
     oauth2Client.setCredentials(JSON.parse(req.query.tokens));
-    var startDate = new Date(req.query.date).getTime();
-    var endDate = startDate + (24 * 60 * 60 * 1000);
-    addEvent(req.query.subject, startDate, endDate);
+    if (req.query.time) {
+      startDate = new Date(req.query.date + 'T' + req.query.time + '-07:00').getTime();
+      endDate = startDate + (30 * 60 * 1000);
+    } else {
+      startDate = new Date(req.query.date).getTime();
+      endDate = startDate + (24 * 60 * 60 * 1000);
+    }
+    var sub = req.query.subject || 'Meeting';
+    addEvent(sub, startDate, endDate);
     res.send('Event added!');
   } else {
     console.log('NOTAUTHORIZED', JSON.parse(decodeURIComponent(req.query.state)));
@@ -97,8 +106,15 @@ router.get('/googleauth/callback', (req, res) => {
               .then(user => {
                 console.log('SAVED', user);
                 var state = JSON.parse(decodeURIComponent(req.query.state));
-                var startDate = new Date(state.date).getTime();
-                var endDate = startDate + (24 * 60 * 60 * 1000);
+                var startDate;
+                var endDate;
+                if (state.time !== undefined) {
+                  startDate = new Date(state.date + 'T' + state.time + '-07:00').getTime();
+                  endDate = startDate + (30 * 60 * 1000);
+                } else {
+                  startDate = new Date(state.date).getTime();
+                  endDate = startDate + (24 * 60 * 60 * 1000);
+                }
                 addEvent(state.subject, startDate, endDate);
               })
           })
@@ -145,15 +161,14 @@ router.post('/interactive', (req, res) => {
             console.log('invitee string' + stringInvitees)
             var formatInvitees = stringInvitees.join('_')
             if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
-              res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}&time=${pending.time}&invitees=${formatInvitees}`);
-              //res.send(200);
+              res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}&time=${pending.time}&invitees=${formatInvitees}&tokens=${JSON.stringify(messager.tokens)}`);
             } else {
               res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}&time=${pending.time}&invitees=${formatInvitees}`);
             }
           }
         })
       } else {
-        console.log('...a remidner')
+        console.log('...a reminder')
         new Reminder({
           subject: pending.subject,
           date: pending.date,
@@ -161,9 +176,9 @@ router.post('/interactive', (req, res) => {
           channel: messager.channel
         }).save(function(err) {
           console.log('CONFIRMED REMINDER', pending);
-          var formatSubject = pending.subject.split(' ').join('_')
+          var formatSubject = pending.subject.split(' ').join('_');
           if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
-            res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}`);
+            res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}&tokens=${JSON.stringify(messager.tokens)}`);
             //res.send(200);
           } else {
             res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}`);

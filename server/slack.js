@@ -96,20 +96,10 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
           },
           data: {
             query: message.text,
-            // context: [{
-            //     name: "weather",
-            //     lifespan: 4
-            // }],
-            // location: {
-            //     latitude: 37.459157,
-            //     longitude: -122.17926
-            // },
-            // timezone: "America/New_York",
             lang: "en",
             sessionId: message.user
           }
         }).then(response => {
-          // console.log('response', response)
           if (!response.data.result.actionIncomplete && Object.keys(response.data.result.parameters).length !== 0) {
             if (response.data.result.action === 'addReminder') {
               User.findOne({ slackId: message.user }, function(err, foundUser) {
@@ -124,7 +114,6 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                 }
                 foundUser.save()
                 .then(resp2 => {
-                  // console.log('response2: ', resp2)
                   var interactive = {
                     text: response.data.result.fulfillment.speech,
                     attachments: [
