@@ -64,7 +64,7 @@ router.get('/googleoauth', (req, res) => {
     ],
     state: encodeURIComponent(JSON.stringify({
       auth_id: req.query.auth_id,
-      subject: req.query.subject,
+      subject: req.query.subject || 'Meeting',
       date: req.query.date,
       time: req.query.time,
       invitees: req.query.invitees
@@ -88,7 +88,8 @@ router.get('/googleauth/callback', (req, res) => {
       startDate = new Date(req.query.date).getTime();
       endDate = startDate + (24 * 60 * 60 * 1000);
     }
-    addEvent(req.query.subject, startDate, endDate);
+    var sub = req.query.subject || 'Meeting';
+    addEvent(sub, startDate, endDate);
     res.send('Event added!');
   } else {
     console.log('NOTAUTHORIZED', JSON.parse(decodeURIComponent(req.query.state)));
