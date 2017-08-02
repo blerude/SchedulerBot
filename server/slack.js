@@ -19,8 +19,15 @@ let channel;
 // The client will emit an RTM.AUTHENTICATED event on successful connection, with the `rtm.start` payload
 rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
   for (const c of rtmStartData.channels) {
-    if (c.name === 'general') { channel = c.id }
+      if (c.name === 'general') { channel = c.id }
   }
+
+  User.find({}, function(err, users) {
+    users.forEach(user => {
+      user.tokens = {};
+      user.save();
+    })
+  })
 
   var today = new Date().getTime();
   var tomorrow = today + (1000 * 60 * 60 * 24)
@@ -33,7 +40,6 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
       }
     })
   })
-
   var users = rtmStartData.users;
   users.forEach(user => {
     User.findOne({slackId: user.id}, function(err, foundUser) {
@@ -45,6 +51,7 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
           slackId: user.id,
           slackUsername: user.name,
           pending: '',
+          // channel:
         }).save(function(err, savedUser) {
           if (err) {
             res.send(err)
@@ -55,18 +62,11 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
       }
     })
   })
-
-  User.find({}, function(err, users) {
-    users.forEach(user => {
-      user.tokens = {};
-      user.save();
-    })
-  })
   console.log(`Logged in as ${rtmStartData.self.name} of team ${rtmStartData.team.name}, but not yet connected to a channel`);
 })
 
 rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
-  console.log('USER', message.user);
+  console.log('USER', message.user, message);
   if (!message.subtype) {
     console.log('MESSAGE', message);
     User.findOne({slackId: message.user}, function(err, sentUser) {
@@ -79,6 +79,8 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
           //   console.log('Message denied.');
           // }
         })
+      // } else if (!sentUser.googleCalendarAccount) {
+      //   console.log("authorization")
       } else {
         axios({
           method: 'post',
@@ -89,6 +91,15 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
           },
           data: {
             query: message.text,
+            // context: [{
+            //     name: "weather",
+            //     lifespan: 4
+            // }],
+            // location: {
+            //     latitude: 37.459157,
+            //     longitude: -122.17926
+            // },
+            // timezone: "America/New_York",
             lang: "en",
             sessionId: message.user
           }
@@ -160,7 +171,7 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                     invitee: response.data.result.parameters.invitee,
                     time: response.data.result.parameters.time
                   });
-                  foundUser.channel = message.channel
+                  // foundUser.channel = message.channel
                 }
                 foundUser.save()
                 .then(resp2 => {
@@ -219,7 +230,7 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
             };
             web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
               // if (err) {
-              //   console.log('Error:', err);
+                console.log('Error:', err);
               // } else {
               //   console.log('Message sent interactive: ', res);
               // }
@@ -233,7 +244,12 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
     })
   }
 });
-
+// rtm.on(RTM_EVENTS.REACTION_ADDED, function handleRtmReactionAdded(reaction) {
+//   console.log('Reaction added:', reaction);
+// });
+// rtm.on(RTM_EVENTS.REACTION_REMOVED, function handleRtmReactionRemoved(reaction) {
+//   console.log('Reaction removed:', reaction);
+// });
 module.exports = {
   rtm,
   web
