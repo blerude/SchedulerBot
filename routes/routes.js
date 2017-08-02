@@ -72,7 +72,8 @@ var addEvent = (subject, start, end) => {
 router.get('/googleauth/callback', (req, res) => {
 
   if (!req.query.state) {
-    console.log('AUTHORIZED', req.query);
+    console.log('AUTHORIZED', JSON.parse(req.query.tokens));
+    oauth2Client.setCredentials(JSON.parse(req.query.tokens));
     var startDate = new Date(req.query.date).getTime();
     var endDate = startDate + (24 * 60 * 60 * 1000);
     addEvent(req.query.subject, startDate, endDate);
@@ -121,7 +122,7 @@ router.post('/interactive', (req, res) => {
       }).save()
       console.log('CONFIRMED', pending);
       if (Object.keys(messager.tokens).length > 0 && messager.tokens.expiry_date > new Date().getTime()) {
-        res.redirect(`/googleauth/callback?subject=${pending.subject}&date=${pending.date}`);
+        res.redirect(`/googleauth/callback?subject=${pending.subject}&date=${pending.date}&tokens=${JSON.stringify(messager.tokens)}`);
       } else {
         res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${pending.subject}&date=${pending.date}`);
       }
