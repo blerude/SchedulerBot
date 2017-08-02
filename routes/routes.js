@@ -139,7 +139,11 @@ router.post('/interactive', (req, res) => {
           } else {
             console.log('CONFIRMED MEETING', savedMeeting);
             var formatSubject = pending.subject.split(' ').join('_')
-            var formatInvitees = pending.invitee.join('_')
+            var stringInvitees = pending.invitee.map(inv => {
+              return inv.split(' ').join('0')
+            })
+            console.log('invitee string' + stringInvitees)
+            var formatInvitees = stringInvitees.join('_')
             if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
               res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}&time=${pending.time}&invitees=${formatInvitees}`);
               //res.send(200);
