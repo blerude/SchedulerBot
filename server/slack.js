@@ -5,11 +5,8 @@ var WebClient = require('@slack/client').WebClient;
 var axios = require('axios')
 var User = require('../models.js').User;
 var Reminder = require('../models.js').Reminder;
-<<<<<<< HEAD
-=======
 var Meeting = require('../models.js').Meeting;
 
->>>>>>> shanlulu
 /*
  * Example for creating and working with the Slack RTM API.
  */
@@ -24,10 +21,7 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
   for (const c of rtmStartData.channels) {
       if (c.name === 'general') { channel = c.id }
   }
-<<<<<<< HEAD
-=======
 
->>>>>>> shanlulu
   var today = new Date().getTime();
   var tomorrow = today + (1000 * 60 * 60 * 24)
   Reminder.find({}, function(err, reminders) {
@@ -121,7 +115,15 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                 var params = response.data.result.parameters;
                 var confirmation;
                 if (params.time) {
-                  confirmation = "Meeting on " + params.date + " at " + params.time + " with " + params.invitees + " to " + params.subject + ", correct?";
+                  if (response.data.result.parameters.subject){
+                    var text = `Meeting with
+                      ${response.data.result.parameters.invitee} to ${response.data.result.parameters.subject}
+                      on  ${response.data.result.parameters.date}, correct?`
+                  } else {
+                    var text = `Meeting with
+                      ${response.data.result.parameters.invitee}
+                      on  ${response.data.result.parameters.date}, correct?`
+                  }
                 } else {
                   confirmation = "Reminder to " + params.subject + " on " + params.date + ", correct?";
                 }
