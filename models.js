@@ -8,7 +8,8 @@ var userSchema = mongoose.Schema({
   slackEmail: String,
   slackDMIds: Array,
   tokens: Object,
-  pending: String
+  pending: String,
+  channel: String,
 });
 
 var reminderSchema =  mongoose.Schema({
@@ -17,18 +18,23 @@ var reminderSchema =  mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
-  }
+  },
+  channel: String
 })
 
 var meetingSchema =  mongoose.Schema({
   subject: String,
   date: String,
-  time: Number,
+  time: String,
+  invitees: Array,
+  location: String,
+  length: String,
+  created: String,
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
-  invitees: Array
+  channel: String
 })
 
 User = mongoose.model('User', userSchema);

@@ -43,7 +43,8 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
           googleCalendarAccount: {},
           slackId: user.id,
           slackUsername: user.name,
-          pending: ''
+          pending: '',
+          // channel:
         }).save(function(err, savedUser) {
           if (err) {
             res.send(err)
@@ -100,58 +101,124 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
         }).then(response => {
           // console.log('response', response)
           if (!response.data.result.actionIncomplete && Object.keys(response.data.result.parameters).length !== 0) {
-            User.findOne({ slackId: message.user }, function(err, foundUser) {
-              if (err) {
-                console.log(err)
-              } else if (!foundUser.pending) {
-                foundUser.pending = JSON.stringify({
-                  subject: response.data.result.parameters.subject,
-                  date: response.data.result.parameters.date
-                });
-              }
-              foundUser.save()
-              .then(resp2 => {
-                // console.log('response2: ', resp2)
-                var interactive = {
-                  text: response.data.result.fulfillment.speech,
-                  attachments: [
-                    {
-                      text: "Reminder to " +
-                        response.data.result.parameters.subject +
-                        " on " + response.data.result.parameters.date +
-                        ", correct?",
-                      fallback: "You could not confirm your meeting",
-                      callback_id: "wopr_game",
-                      color: "#3AA3E3",
-                      attachment_type: "default",
-                      actions: [
-                        {
-                          name: "confim",
-                          text: "Yes",
-                          type: "button",
-                          value: "yes"
-                        },
-                        {
-                          name: "confirm",
-                          text: "Cancel",
-                          type: "button",
-                          value: "cancel"
-                        }
-                      ]
-                    }
-                  ]
+            if (response.data.result.action === 'addReminder') {
+              User.findOne({ slackId: message.user }, function(err, foundUser) {
+                if (err) {
+                  console.log(err)
+                } else if (!foundUser.pending) {
+                  foundUser.pending = JSON.stringify({
+                    subject: response.data.result.parameters.subject,
+                    date: response.data.result.parameters.date,
+                  });
+                  foundUser.channel = message.channel
                 }
-                web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
-                  // if (err) {
-                  //   console.log('Error:', err);
-                  // } else {
-                  //   console.log('Message sent interactive: ', res);
-                  // }
-                })
-              }).catch(function (error) {
-                console.log('uh oh' + error);
-              });
-            })
+                foundUser.save()
+                .then(resp2 => {
+                  // console.log('response2: ', resp2)
+                  var interactive = {
+                    text: response.data.result.fulfillment.speech,
+                    attachments: [
+                      {
+                        text: "Reminder to " +
+                          response.data.result.parameters.subject +
+                          " on " + response.data.result.parameters.date +
+                          ", correct?",
+                        fallback: "You could not confirm your meeting",
+                        callback_id: "wopr_game",
+                        color: "#3AA3E3",
+                        attachment_type: "default",
+                        actions: [
+                          {
+                            name: "confim",
+                            text: "Yes",
+                            type: "button",
+                            value: "yes"
+                          },
+                          {
+                            name: "confirm",
+                            text: "Cancel",
+                            type: "button",
+                            value: "cancel"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                  web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+                    // if (err) {
+                    //   console.log('Error:', err);
+                    // } else {
+                    //   console.log('Message sent interactive: ', res);
+                    // }
+                  })
+                }).catch(function (error) {
+                  console.log('uh oh' + error);
+                });
+              })
+            } else if (response.data.result.action === 'addMeeting') {
+              User.findOne({ slackId: message.user }, function(err, foundUser) {
+                if (err) {
+                  console.log(err)
+                } else if (!foundUser.pending) {
+                  foundUser.pending = JSON.stringify({
+                    subject: response.data.result.parameters.subject,
+                    date: response.data.result.parameters.date,
+                    invitee: response.data.result.parameters.invitee,
+                    time: response.data.result.parameters.time
+                  });
+                  // foundUser.channel = message.channel
+                }
+                foundUser.save()
+                .then(resp2 => {
+                  // console.log('response2: ', resp2)
+                  if (response.data.result.parameters.subject){
+                    var text = `Meeting with
+                      ${response.data.result.parameters.invitee} to ${response.data.result.parameters.subject}
+                      on ${response.data.result.parameters.date}, correct?`
+                  } else {
+                    var text = `Meeting with
+                      ${response.data.result.parameters.invitee}
+                      on ${response.data.result.parameters.date}, correct?`
+                  }
+
+                  var interactive = {
+                    text: response.data.result.fulfillment.speech,
+                    attachments: [
+                      {
+                        text: text,
+                        fallback: "You could not confirm your meeting",
+                        callback_id: "wopr_game",
+                        color: "#3AA3E3",
+                        attachment_type: "default",
+                        actions: [
+                          {
+                            name: "confim",
+                            text: "Yes",
+                            type: "button",
+                            value: "yes"
+                          },
+                          {
+                            name: "confirm",
+                            text: "Cancel",
+                            type: "button",
+                            value: "cancel"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                  web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+                    // if (err) {
+                    //   console.log('Error:', err);
+                    // } else {
+                    //   console.log('Message sent interactive: ', res);
+                    // }
+                  })
+                }).catch(function (error) {
+                  console.log('uh oh' + error);
+                });
+              })
+            }
           } else {
             var interactive = {
               text: response.data.result.fulfillment.speech,
