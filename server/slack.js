@@ -32,14 +32,31 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
     })
   })
 
+  // var today = new Date().getTime();
+  // var tomorrow = today + (1000 * 60 * 60 * 24)
+  // Reminder.find({}, function(err, reminders) {
+  //   reminders.forEach(rem => {
+  //     if (new Date(rem.date).getTime() > today && new Date(rem.date).getTime() < tomorrow) {
+  //       var msg = 'Reminder: You have to ' + rem.subject + ' soon!'
+  //       console.log('hey ' + msg)
+  //       web.chat.postMessage(channel, msg)
+  //     }
+  //   })
+  // })
+
+  console.log('sending')
   var today = new Date().getTime();
-  var tomorrow = today + (1000 * 60 * 60 * 24)
+  var tomorrow = today + (1000 * 60 * 60 * 24);
+  var nextDay = tomorrow + (1000 * 60 * 60 * 24);
   Reminder.find({}, function(err, reminders) {
     reminders.forEach(rem => {
       if (new Date(rem.date).getTime() > today && new Date(rem.date).getTime() < tomorrow) {
-        var msg = 'Reminder: You have to ' + rem.subject + ' soon!'
-        console.log('hey ' + msg)
-        web.chat.postMessage(channel, msg)
+        var msg = 'Reminder: You have to ' + rem.subject + ' in the next 24 hours!';
+        web.chat.postMessage(rem.channel, msg)
+        rem.remove()
+      } else if (new Date(rem.date).getTime() > tomorrow && new Date(rem.date).getTime() < nextDay) {
+        var msg = 'Reminder: You have to ' + rem.subject + ' in one day!';
+        web.chat.postMessage(rem.channel, msg)
       }
     })
   })
@@ -156,7 +173,7 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
               var invitees = response.data.result.parameters.invitee;
               var pendingInvitees = [];
               var invPromises = invitees.map(inv => {
-                var realInv = inv.slice(2)
+                var realInv = inv.split('@')[1];
                 return User.findOne({ slackId: realInv })
                 .exec()
               })
