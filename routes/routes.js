@@ -2,6 +2,8 @@ var express = require('express');
 var router = express.Router();
 var models = require('../models');
 var User = models.User;
+var Reminder = models.Reminder;
+var Meeting = models.Meeting;
 var google = require('googleapis');
 var OAuth2 = google.auth.OAuth2;
 var axios = require('axios');
@@ -14,6 +16,37 @@ var oauth2Client = new OAuth2(
   process.env.GOOGLE_CLIENT_SECRET,
   'http://localhost:3000/googleauth/callback'
 );
+
+var addEvent = (subject, start, end) => {
+  console.log('IN FUNCTION');
+  var event = {
+    summary: subject,
+    // location: '800 Howard St., San Francisco, CA 94103',
+    // description: 'A chance to hear more about Google\'s developer products.',
+    start: {
+      dateTime: new Date(start),
+      timeZone: 'America/Los_Angeles'
+    },
+    end: {
+      dateTime: new Date(end),
+      timeZone: 'America/Los_Angeles'
+    }
+  };
+
+  var calendar = google.calendar('v3');
+  calendar.events.insert({
+    auth: oauth2Client,
+    calendarId: 'primary',
+    resource: event,
+  }, function(err, e) {
+    if (err) {
+      console.log('ERROR', err);
+      return;
+    }
+    console.log('Event created: %s', e.htmlLink);
+  });
+}
+
 
 google.options({
   auth: oauth2Client
@@ -40,36 +73,6 @@ router.get('/googleoauth', (req, res) => {
 })
 
 router.get('/googleauth/callback', (req, res) => {
-  var addEvent = (subject, start, end) => {
-    console.log('IN FUNCTION');
-    var event = {
-      summary: subject,
-      // location: '800 Howard St., San Francisco, CA 94103',
-      // description: 'A chance to hear more about Google\'s developer products.',
-      start: {
-        dateTime: new Date(start),
-        timeZone: 'America/Los_Angeles'
-      },
-      end: {
-        dateTime: new Date(end),
-        timeZone: 'America/Los_Angeles'
-      }
-    };
-
-    var calendar = google.calendar('v3');
-    calendar.events.insert({
-      auth: oauth2Client,
-      calendarId: 'primary',
-      resource: event,
-    }, function(err, e) {
-      if (err) {
-        console.log('ERROR', err);
-        return;
-      }
-      console.log('Event created: %s', e.htmlLink);
-    });
-  }
-
   // console.log('AFTER FUNCTION', JSON.parse(decodeURIComponent(req.query.state)));
 
   if (!req.query.state) {
@@ -112,26 +115,60 @@ router.post('/interactive', (req, res) => {
   var string = JSON.parse(req.body.payload);
   User.findOne({slackId: string.user.id}, function(err, messager) {
     if (string.actions[0].value === 'cancel') {
+      console.log('CANCELLED!')
       res.send('Scheduler cancelled');
     } else {
       var pending = JSON.parse(messager.pending)
-      new Reminder({
-        subject: pending.subject,
-        date: pending.date,
-        user: messager._id
-      }).save()
-      console.log('CONFIRMED', pending);
-      if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
-        res.redirect(`/googleauth/callback?subject=${pending.subject}&date=${pending.date}`);
-        //res.send(200);
+      console.log('saving...')
+      if (pending.invitee) {
+        console.log('...a meeting')
+        new Meeting({
+          subject: pending.subject,
+          date: pending.date,
+          time: pending.time,
+          invitees: pending.invitee,
+          location: '',
+          length: '',
+          created: '',
+          user: messager._id,
+          channel: messager.channel
+        }).save(function(err, savedMeeting) {
+          if (err) {
+            console.log(err)
+          } else {
+            console.log('CONFIRMED MEETING', savedMeeting);
+            var formatSubject = pending.subject.split(' ').join('_')
+            var formatInvitees = pending.invitee.join('_')
+            if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
+              res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}&time=${pending.time}&invitees=${formatInvitees}`);
+              //res.send(200);
+            } else {
+              res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}&time=${pending.time}&invitees=${formatInvitees}`);
+            }
+          }
+        })
       } else {
-        res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${pending.subject}&date=${pending.date}`);
+        console.log('...a remidner')
+        new Reminder({
+          subject: pending.subject,
+          date: pending.date,
+          user: messager._id,
+          channel: messager.channel
+        }).save(function(err) {
+          console.log('CONFIRMED REMINDER', pending);
+          var formatSubject = pending.subject.split(' ').join('_')
+          if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
+            res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}`);
+            //res.send(200);
+          } else {
+            res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}`);
+          }
+        })
       }
     }
     messager.pending = '';
     messager.save();
   })
 })
-
 
 module.exports = router;

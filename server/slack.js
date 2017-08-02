@@ -5,7 +5,6 @@ var WebClient = require('@slack/client').WebClient;
 var axios = require('axios')
 var User = require('../models.js').User;
 var Reminder = require('../models.js').Reminder;
-var Meeting = require('../models.js').Meeting;
 
 /*
  * Example for creating and working with the Slack RTM API.
@@ -21,7 +20,7 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
   for (const c of rtmStartData.channels) {
       if (c.name === 'general') { channel = c.id }
   }
-
+  ////
   var today = new Date().getTime();
   var tomorrow = today + (1000 * 60 * 60 * 24)
   Reminder.find({}, function(err, reminders) {
@@ -43,7 +42,8 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
           googleCalendarAccount: {},
           slackId: user.id,
           slackUsername: user.name,
-          pending: ''
+          pending: '',
+          // channel:
         }).save(function(err, savedUser) {
           if (err) {
             res.send(err)
@@ -98,138 +98,126 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
             sessionId: message.user
           }
         }).then(response => {
-          console.log('responseACTION', response.data.result.action)
-          if ( response.data.result.action === 'addReminder' && !response.data.result.actionIncomplete) {
-            User.findOne({ slackId: message.user }, function(err, foundUser) {
-              if (err) {
-                console.log(err)
-              } else if (!foundUser.pending) {
-                foundUser.pending = JSON.stringify({
-                  subject: response.data.result.parameters.subject,
-                  date: response.data.result.parameters.date
+          // console.log('response', response)
+          if (!response.data.result.actionIncomplete && Object.keys(response.data.result.parameters).length !== 0) {
+            if (response.data.result.action === 'addReminder') {
+              User.findOne({ slackId: message.user }, function(err, foundUser) {
+                if (err) {
+                  console.log(err)
+                } else if (!foundUser.pending) {
+                  foundUser.pending = JSON.stringify({
+                    subject: response.data.result.parameters.subject,
+                    date: response.data.result.parameters.date,
+                  });
+                  foundUser.channel = message.channel
+                }
+                foundUser.save()
+                .then(resp2 => {
+                  // console.log('response2: ', resp2)
+                  var interactive = {
+                    text: response.data.result.fulfillment.speech,
+                    attachments: [
+                      {
+                        text: "Reminder to " +
+                          response.data.result.parameters.subject +
+                          " on " + response.data.result.parameters.date +
+                          ", correct?",
+                        fallback: "You could not confirm your meeting",
+                        callback_id: "wopr_game",
+                        color: "#3AA3E3",
+                        attachment_type: "default",
+                        actions: [
+                          {
+                            name: "confim",
+                            text: "Yes",
+                            type: "button",
+                            value: "yes"
+                          },
+                          {
+                            name: "confirm",
+                            text: "Cancel",
+                            type: "button",
+                            value: "cancel"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                  web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+                    // if (err) {
+                    //   console.log('Error:', err);
+                    // } else {
+                    //   console.log('Message sent interactive: ', res);
+                    // }
+                  })
+                }).catch(function (error) {
+                  console.log('uh oh' + error);
                 });
-              }
-              foundUser.save()
-              .then(resp2 => {
-                // console.log('response2: ', resp2)
-                var params = response.data.result.parameters;
-                var confirmation;
-                if (params.time) {
+              })
+            } else if (response.data.result.action === 'addMeeting') {
+              User.findOne({ slackId: message.user }, function(err, foundUser) {
+                if (err) {
+                  console.log(err)
+                } else if (!foundUser.pending) {
+                  foundUser.pending = JSON.stringify({
+                    subject: response.data.result.parameters.subject,
+                    date: response.data.result.parameters.date,
+                    invitee: response.data.result.parameters.invitee,
+                    time: response.data.result.parameters.time
+                  });
+                  // foundUser.channel = message.channel
+                }
+                foundUser.save()
+                .then(resp2 => {
+                  // console.log('response2: ', resp2)
                   if (response.data.result.parameters.subject){
                     var text = `Meeting with
                       ${response.data.result.parameters.invitee} to ${response.data.result.parameters.subject}
-                      on  ${response.data.result.parameters.date}, correct?`
+                      on ${response.data.result.parameters.date}, correct?`
                   } else {
                     var text = `Meeting with
                       ${response.data.result.parameters.invitee}
-                      on  ${response.data.result.parameters.date}, correct?`
+                      on ${response.data.result.parameters.date}, correct?`
                   }
-                } else {
-                  confirmation = "Reminder to " + params.subject + " on " + params.date + ", correct?";
-                }
-                var interactive = {
-                  text: response.data.result.fulfillment.speech,
-                  attachments: [
-                    {
-                      text: confirmation,
-                      fallback: "You could not confirm your meeting",
-                      callback_id: "wopr_game",
-                      color: "#3AA3E3",
-                      attachment_type: "default",
-                      actions: [
-                        {
-                          name: "confim",
-                          text: "Yes",
-                          type: "button",
-                          value: "yes"
-                        },
-                        {
-                          name: "confirm",
-                          text: "Cancel",
-                          type: "button",
-                          value: "cancel"
-                        }
-                      ]
-                    }
-                  ]
-                }
-                web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
-                  // if (err) {
-                  //   console.log('Error:', err);
-                  // } else {
-                  //   console.log('Message sent interactive: ', res);
-                  // }
-                })
-              }).catch(function (error) {
-                console.log('uh oh' + error);
-              });
-            })
-          } else if(response.data.result.action === 'addMeeting'){
-            if (!response.data.result.actionIncomplete&& Object.keys(response.data.result.parameters).length !== 0 ) {
-            // && Object.keys(response.data.result.parameters).length !== 0
-            User.findOne({ slackId: message.user }, function(err, foundUser) {
-              if (err) {
-                console.log(err)
-              } else if (!foundUser.pending) {
-                foundUser.pending = JSON.stringify({
-                  subject: response.data.result.parameters.subject,
-                  date: response.data.result.parameters.date,
-                  invitee:response.data.result.parameters.invitee,
-                  time:response.data.result.parameters.time
-                });
-              }
-              foundUser.save()
-              .then(resp2 => {
-                // console.log('response2: ', resp2)
-                //get each invitee
-                if (response.data.result.parameters.subject){
-                  var text = `Meeting with
-                    ${response.data.result.parameters.invitee} to ${response.data.result.parameters.subject}
-                    on  ${response.data.result.parameters.date}, correct?`
-                } else {
-                  var text = `Meeting with
-                    ${response.data.result.parameters.invitee}
-                    on  ${response.data.result.parameters.date}, correct?`
-                }
 
-                var interactive = {
-                  text: response.data.result.fulfillment.speech,
-                  attachments: [
-                    {
-                      text: text ,
-                      fallback: "You could not confirm your meeting",
-                      callback_id: "wopr_game",
-                      color: "#3AA3E3",
-                      attachment_type: "default",
-                      actions: [
-                        {
-                          name: "confim",
-                          text: "Yes",
-                          type: "button",
-                          value: "yes"
-                        },
-                        {
-                          name: "confirm",
-                          text: "Cancel",
-                          type: "button",
-                          value: "cancel"
-                        }
-                      ]
-                    }
-                  ]
-                }
-                web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
-                  // if (err) {
-                  //   console.log('Error:', err);
-                  // } else {
-                  //   console.log('Message sent interactive: ', res);
-                  // }
-                })
-              }).catch(function (error) {
-                console.log('uh oh' + error);
-              });
-            })
-          }
+                  var interactive = {
+                    text: response.data.result.fulfillment.speech,
+                    attachments: [
+                      {
+                        text: text,
+                        fallback: "You could not confirm your meeting",
+                        callback_id: "wopr_game",
+                        color: "#3AA3E3",
+                        attachment_type: "default",
+                        actions: [
+                          {
+                            name: "confim",
+                            text: "Yes",
+                            type: "button",
+                            value: "yes"
+                          },
+                          {
+                            name: "confirm",
+                            text: "Cancel",
+                            type: "button",
+                            value: "cancel"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                  web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+                    // if (err) {
+                    //   console.log('Error:', err);
+                    // } else {
+                    //   console.log('Message sent interactive: ', res);
+                    // }
+                  })
+                }).catch(function (error) {
+                  console.log('uh oh' + error);
+                });
+              })
+            }
           } else {
             var interactive = {
               text: response.data.result.fulfillment.speech,
