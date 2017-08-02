@@ -3,14 +3,9 @@ var RTM_EVENTS = require('@slack/client').RTM_EVENTS;
 var CLIENT_EVENTS = require('@slack/client').CLIENT_EVENTS;
 var WebClient = require('@slack/client').WebClient;
 var axios = require('axios')
-<<<<<<< HEAD
-/**
-=======
 var User = require('../models.js').User;
 var Reminder = require('../models.js').Reminder;
-
 /*
->>>>>>> shanlulu
  * Example for creating and working with the Slack RTM API.
  */
 /* eslint no-console:0 */
@@ -24,11 +19,6 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
   for (const c of rtmStartData.channels) {
       if (c.name === 'general') { channel = c.id }
   }
-<<<<<<< HEAD
-=======
-
-  console.log('RTMSTARTDATA', rtmStartData);
-
   var today = new Date().getTime();
   var tomorrow = today + (1000 * 60 * 60 * 24)
   Reminder.find({}, function(err, reminders) {
@@ -40,7 +30,6 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
       }
     })
   })
-
   var users = rtmStartData.users;
   users.forEach(user => {
     User.findOne({slackId: user.id}, function(err, foundUser) {
@@ -62,66 +51,15 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
       }
     })
   })
->>>>>>> shanlulu
   console.log(`Logged in as ${rtmStartData.self.name} of team ${rtmStartData.team.name}, but not yet connected to a channel`);
 })
 // rtm.on(CLIENT_EVENTS.RTM.RTM_CONNECTION_OPENED, function () {
 //   rtm.sendMessage("SchedulerBot at your service!", channel);
 // });
 rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
-  console.log('USER', message.user);
+  console.log('USER', message.user, message);
   if (!message.subtype) {
     console.log('MESSAGE', message);
-<<<<<<< HEAD
-    axios({
-      method: 'post',
-      url: 'https://api.api.ai/v1/query?v=20150910',
-      headers: {
-        "Authorization": "Bearer a53d802617124f92b9a6d63c76dd2d08",
-        "Content-Type": "application/json; charset=utf-8"
-      },
-      data: {
-        query: message.text,
-        // context: [{
-        //     name: "weather",
-        //     lifespan: 4
-        // }],
-        // location: {
-        //     latitude: 37.459157,
-        //     longitude: -122.17926
-        // },
-        // timezone: "America/New_York",
-        lang: "en",
-        sessionId: message.user
-      }
-    })
-    .then(function (response) {
-      console.log(response)
-      if (!response.data.result.actionIncomplete && Object.keys(response.data.result.parameters).length !== 0) {
-        // console.log("resp d params",response.data.result.parameters);
-        var interactive = {
-
-          text: response.data.result.fulfillment.speech,
-          attachments: [
-            {
-              text: `Is this correct? : ${response.data.result.parameters.subject} on ${response.data.result.parameters.date}  `,
-              fallback: "You could not confirm your meeting",
-              callback_id: "wopr_game",
-              color: "#3AA3E3",
-              attachment_type: "default",
-              actions: [
-                {
-                  name: "confim",
-                  text: "Yes",
-                  type: "button",
-                  value: "yes"
-                },
-                {
-                  name: "confirm",
-                  text: "Cancel",
-                  type: "button",
-                  value: "cancel"
-=======
     User.findOne({slackId: message.user}, function(err, sentUser) {
       console.log('user: ', sentUser)
       if (sentUser.pending) {
@@ -157,8 +95,8 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
             sessionId: message.user
           }
         }).then(response => {
-          // console.log('response', response)
-          if (!response.data.result.actionIncomplete && Object.keys(response.data.result.parameters).length !== 0) {
+          console.log('responseACTION', response.data.result.action)
+          if ( response.data.result.action === 'addReminder' && !response.data.result.actionIncomplete) {
             User.findOne({ slackId: message.user }, function(err, foundUser) {
               if (err) {
                 console.log(err)
@@ -199,28 +137,102 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                       ]
                     }
                   ]
->>>>>>> shanlulu
                 }
-              ]
-            }
-          ]
-        }
-      } else {
-        var interactive = {
-          text: response.data.result.fulfillment.speech,
-        };
+                web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+                  // if (err) {
+                  //   console.log('Error:', err);
+                  // } else {
+                  //   console.log('Message sent interactive: ', res);
+                  // }
+                })
+              }).catch(function (error) {
+                console.log('uh oh' + error);
+              });
+            })
+          } else if(response.data.result.action === 'addMeeting'){
+            if (!response.data.result.actionIncomplete ) {
+            // && Object.keys(response.data.result.parameters).length !== 0
+            User.findOne({ slackId: message.user }, function(err, foundUser) {
+              if (err) {
+                console.log(err)
+              } else if (!foundUser.pending) {
+                foundUser.pending = JSON.stringify({
+                  subject: response.data.result.parameters.subject,
+                  date: response.data.result.parameters.date,
+                  invitee:response.data.result.parameters.invitee,
+                  time:response.data.result.parameters.time
+                });
+              }
+              foundUser.save()
+              .then(resp2 => {
+                // console.log('response2: ', resp2)
+                //get each invitee
+                if (response.data.result.parameters.subject){
+                  var text = `Meeting with
+                    ${response.data.result.parameters.invitee} to ${response.data.result.parameters.subject}
+                    on  ${response.data.result.parameters.date}, correct?`
+                } else {
+                  var text = `Meeting with
+                    ${response.data.result.parameters.invitee}
+                    on  ${response.data.result.parameters.date}, correct?`
+                }
+
+                var interactive = {
+                  text: response.data.result.fulfillment.speech,
+                  attachments: [
+                    {
+                      text: text ,
+                      fallback: "You could not confirm your meeting",
+                      callback_id: "wopr_game",
+                      color: "#3AA3E3",
+                      attachment_type: "default",
+                      actions: [
+                        {
+                          name: "confim",
+                          text: "Yes",
+                          type: "button",
+                          value: "yes"
+                        },
+                        {
+                          name: "confirm",
+                          text: "Cancel",
+                          type: "button",
+                          value: "cancel"
+                        }
+                      ]
+                    }
+                  ]
+                }
+                web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+                  // if (err) {
+                  //   console.log('Error:', err);
+                  // } else {
+                  //   console.log('Message sent interactive: ', res);
+                  // }
+                })
+              }).catch(function (error) {
+                console.log('uh oh' + error);
+              });
+            })
+          }
+          } else {
+            var interactive = {
+              text: response.data.result.fulfillment.speech,
+            };
+            web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+              // if (err) {
+                console.log('Error:', err);
+              // } else {
+              //   console.log('Message sent interactive: ', res);
+              // }
+            })
+          }
+        })
+        .catch(function (error) {
+          console.log(error);
+        });
       }
-      web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
-        if (err) {
-          console.log('Error:', err);
-        } else {
-          console.log('Message sent interactive: ', res);
-        }
-      })
     })
-    .catch(function (error) {
-      console.log(error);
-    });
   }
 });
 // rtm.on(RTM_EVENTS.REACTION_ADDED, function handleRtmReactionAdded(reaction) {
