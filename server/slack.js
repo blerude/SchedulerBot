@@ -66,15 +66,6 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
   })
   console.log(`Logged in as ${rtmStartData.self.name} of team ${rtmStartData.team.name}, but not yet connected to a channel`);
 })
-<<<<<<< HEAD
-// rtm.on(CLIENT_EVENTS.RTM.RTM_CONNECTION_OPENED, function () {
-//   rtm.sendMessage("SchedulerBot at your service!", channel);
-// });
-=======
-
-<<<<<<< HEAD
-<<<<<<< HEAD
-// rtm.start();
 
 rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
   console.log('MESSAGE', message);
@@ -108,18 +99,7 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
     console.log(error);
   });
 });
-=======
-// rtm.on(CLIENT_EVENTS.RTM.RTM_CONNECTION_OPENED, function () {
-//   rtm.sendMessage("SchedulerBot at your service!", channel);
-// });
->>>>>>> blerude
-=======
-// rtm.on(CLIENT_EVENTS.RTM.RTM_CONNECTION_OPENED, function () {
-//   rtm.sendMessage("SchedulerBot at your service!", channel);
-// });
->>>>>>> shanlulu
 
->>>>>>> xhonia
 rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
   console.log('USER', message.user);
   if (!message.subtype) {
