@@ -32,7 +32,7 @@ var models = require('./models');
 
 var routes = require('./routes/routes');
 var app = express();
-//var reminders = require('./server/reminders.js')
+// var reminders = require('./server/reminders.js')
 // reminders();
 
 // view engine setup

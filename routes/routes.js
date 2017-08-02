@@ -21,15 +21,13 @@ var addEvent = (subject, start, end) => {
   console.log('IN FUNCTION');
   var event = {
     summary: subject,
-    // location: '800 Howard St., San Francisco, CA 94103',
-    // description: 'A chance to hear more about Google\'s developer products.',
     start: {
       dateTime: new Date(start)
-      // timeZone: 'America/New_York'
+      // timeZone: 'America/San_Francisco'
     },
     end: {
       dateTime: new Date(end)
-      // timeZone: 'America/New_York'
+      // timeZone: 'America/San_Francisco'
     }
   };
 
