@@ -23,9 +23,12 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
   }
 
   User.find({}, function(err, users) {
+    console.log('SET TOKEN');
     users.forEach(user => {
-      user.tokens = {};
-      user.save();
+      if (!user.tokens || (user.tokens && user.tokens.expiry_date < new Date().getTime())) {
+        user.tokens = {};
+        user.save();
+      }
     })
   })
 

@@ -76,7 +76,8 @@ router.get('/googleauth/callback', (req, res) => {
   // console.log('AFTER FUNCTION', JSON.parse(decodeURIComponent(req.query.state)));
 
   if (!req.query.state) {
-    console.log('AUTHORIZED', req.query);
+    console.log('AUTHORIZED', JSON.parse(req.query.tokens));
+    oauth2Client.setCredentials(JSON.parse(req.query.tokens));
     var startDate = new Date(req.query.date).getTime();
     var endDate = startDate + (24 * 60 * 60 * 1000);
     addEvent(req.query.subject, startDate, endDate);
