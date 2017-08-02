@@ -21,7 +21,6 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
       if (c.name === 'general') { channel = c.id }
   }
   ////
-  console.log('sending')
   var today = new Date().getTime();
   var tomorrow = today + (1000 * 60 * 60 * 24)
   Reminder.find({}, function(err, reminders) {
@@ -33,7 +32,6 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
       }
     })
   })
-  console.log('done sendign')
   ////
   var users = rtmStartData.users;
   users.forEach(user => {
