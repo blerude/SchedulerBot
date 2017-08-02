@@ -5,6 +5,7 @@ var userSchema = mongoose.Schema({
   defaultMeetingMinutes: Number,
   slackId: String,
   slackUsername: String,
+  slackRealName: String,
   slackEmail: String,
   slackDMIds: Array,
   tokens: Object,

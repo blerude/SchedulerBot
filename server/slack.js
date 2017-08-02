@@ -52,6 +52,8 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
         new User({
           googleCalendarAccount: {},
           slackId: user.id,
+          slackRealName: user.real_name || '',
+          slackEmail: user.profile.email || '',
           slackUsername: user.name,
           pending: '',
           // channel:
@@ -116,10 +118,7 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                     text: response.data.result.fulfillment.speech,
                     attachments: [
                       {
-                        text: "Reminder to " +
-                          response.data.result.parameters.subject +
-                          " on " + response.data.result.parameters.date +
-                          ", correct?",
+                        text: "Reminder to " + response.data.result.parameters.subject + " on " + response.data.result.parameters.date + ", correct?",
                         fallback: "You could not confirm your meeting",
                         callback_id: "wopr_game",
                         color: "#3AA3E3",
@@ -153,67 +152,83 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                 });
               })
             } else if (response.data.result.action === 'addMeeting') {
-              User.findOne({ slackId: message.user }, function(err, foundUser) {
-                if (err) {
-                  console.log(err)
-                } else if (!foundUser.pending) {
-                  foundUser.pending = JSON.stringify({
-                    subject: response.data.result.parameters.subject,
-                    date: response.data.result.parameters.date,
-                    invitee: response.data.result.parameters.invitee,
-                    time: response.data.result.parameters.time
-                  });
-                  // foundUser.channel = message.channel
-                }
-                foundUser.save()
-                .then(resp2 => {
-                  // console.log('response2: ', resp2)
-                  if (response.data.result.parameters.subject){
-                    var text = `Meeting with
-                      ${response.data.result.parameters.invitee} to ${response.data.result.parameters.subject}
-                      on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
-                  } else {
-                    var text = `Meeting with
-                      ${response.data.result.parameters.invitee}
-                      on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
-                  }
 
-                  var interactive = {
-                    text: response.data.result.fulfillment.speech,
-                    attachments: [
-                      {
-                        text: text,
-                        fallback: "You could not confirm your meeting",
-                        callback_id: "wopr_game",
-                        color: "#3AA3E3",
-                        attachment_type: "default",
-                        actions: [
-                          {
-                            name: "confim",
-                            text: "Yes",
-                            type: "button",
-                            value: "yes"
-                          },
-                          {
-                            name: "confirm",
-                            text: "Cancel",
-                            type: "button",
-                            value: "cancel"
-                          }
-                        ]
-                      }
-                    ]
+              var invitees = response.data.result.parameters.invitee;
+              var pendingInvitees = [];
+              var invPromises = invitees.map(inv => {
+                var realInv = inv.slice(2)
+                return User.findOne({ slackId: realInv })
+                .exec()
+              })
+              Promise.all(invPromises)
+              .then(returnValue => {
+                returnValue.forEach(val => {
+                  if (!val) {
+                    console.log("User not found; can't invite them.")
+                  } else {
+                    pendingInvitees.push(val.slackRealName)
                   }
-                  web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
-                    // if (err) {
-                    //   console.log('Error:', err);
-                    // } else {
-                    //   console.log('Message sent interactive: ', res);
-                    // }
-                  })
-                }).catch(function (error) {
-                  console.log('uh oh' + error);
-                });
+                })
+
+                User.findOne({ slackId: message.user }, function(err, foundUser) {
+                  if (err) {
+                    console.log(err)
+                  } else if (!foundUser.pending) {
+                    foundUser.pending = JSON.stringify({
+                      subject: response.data.result.parameters.subject,
+                      date: response.data.result.parameters.date,
+                      invitee: pendingInvitees,
+                      time: response.data.result.parameters.time
+                    });
+                    foundUser.channel = message.channel
+                  }
+                  foundUser.save()
+                  .then(resp2 => {
+                    var parseList = JSON.parse(resp2.pending).invitee
+                    var inviteeList = parseList.join(', ')
+                    if (response.data.result.parameters.subject){
+                      var text = `Meeting with ${inviteeList} to ${response.data.result.parameters.subject} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
+                    } else {
+                      var text = `Meeting with ${inviteeList} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
+                    }
+
+                    var interactive = {
+                      text: response.data.result.fulfillment.speech,
+                      attachments: [
+                        {
+                          text: text,
+                          fallback: "You could not confirm your meeting",
+                          callback_id: "wopr_game",
+                          color: "#3AA3E3",
+                          attachment_type: "default",
+                          actions: [
+                            {
+                              name: "confim",
+                              text: "Yes",
+                              type: "button",
+                              value: "yes"
+                            },
+                            {
+                              name: "confirm",
+                              text: "Cancel",
+                              type: "button",
+                              value: "cancel"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                    web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+                      // if (err) {
+                      //   console.log('Error:', err);
+                      // } else {
+                      //   console.log('Message sent interactive: ', res);
+                      // }
+                    })
+                  }).catch(function (error) {
+                    console.log('uh oh' + error);
+                  });
+                })
               })
             }
           } else {
@@ -236,12 +251,7 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
     })
   }
 });
-// rtm.on(RTM_EVENTS.REACTION_ADDED, function handleRtmReactionAdded(reaction) {
-//   console.log('Reaction added:', reaction);
-// });
-// rtm.on(RTM_EVENTS.REACTION_REMOVED, function handleRtmReactionRemoved(reaction) {
-//   console.log('Reaction removed:', reaction);
-// });
+
 module.exports = {
   rtm,
   web
