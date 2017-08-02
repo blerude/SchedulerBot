@@ -2,6 +2,8 @@ var express = require('express');
 var router = express.Router();
 var models = require('../models');
 var User = models.User;
+var Reminder = models.Reminder;
+var Meeting = models.Meeting;
 var google = require('googleapis');
 var OAuth2 = google.auth.OAuth2;
 var axios = require('axios');
@@ -14,30 +16,6 @@ var oauth2Client = new OAuth2(
   process.env.GOOGLE_CLIENT_SECRET,
   'http://localhost:3000/googleauth/callback'
 );
-
-google.options({
-  auth: oauth2Client
-});
-
-router.get('/googleoauth', (req, res) => {
-  console.log('ID', process.env.GOOGLE_CLIENT_ID);
-  var url = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    prompt: 'consent',
-    scope: [
-      'https://www.googleapis.com/auth/userinfo.profile',
-      'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/plus.me'
-    ],
-    state: encodeURIComponent(JSON.stringify({
-      auth_id: req.query.auth_id,
-      subject: req.query.subject,
-      date: req.query.date
-    }))
-  });
-  console.log('URL', url);
-  res.redirect(url);
-})
 
 var addEvent = (subject, start, end) => {
   console.log('IN FUNCTION');
@@ -69,7 +47,33 @@ var addEvent = (subject, start, end) => {
   });
 }
 
+
+google.options({
+  auth: oauth2Client
+});
+
+router.get('/googleoauth', (req, res) => {
+  console.log('ID', process.env.GOOGLE_CLIENT_ID);
+  var url = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: [
+      'https://www.googleapis.com/auth/userinfo.profile',
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/plus.me'
+    ],
+    state: encodeURIComponent(JSON.stringify({
+      auth_id: req.query.auth_id,
+      subject: req.query.subject,
+      date: req.query.date
+    }))
+  });
+  console.log('URL', url);
+  res.redirect(url);
+})
+
 router.get('/googleauth/callback', (req, res) => {
+  // console.log('AFTER FUNCTION', JSON.parse(decodeURIComponent(req.query.state)));
 
   if (!req.query.state) {
     console.log('AUTHORIZED', JSON.parse(req.query.tokens));
@@ -112,25 +116,59 @@ router.post('/interactive', (req, res) => {
   var string = JSON.parse(req.body.payload);
   User.findOne({slackId: string.user.id}, function(err, messager) {
     if (string.actions[0].value === 'cancel') {
+      console.log('CANCELLED!')
       res.send('Scheduler cancelled');
     } else {
       var pending = JSON.parse(messager.pending)
-      new Reminder({
-        subject: pending.subject,
-        date: pending.date,
-        user: messager._id
-      }).save()
-      console.log('CONFIRMED', pending);
-      if (Object.keys(messager.tokens).length > 0 && messager.tokens.expiry_date > new Date().getTime()) {
-        res.redirect(`/googleauth/callback?subject=${pending.subject}&date=${pending.date}&tokens=${JSON.stringify(messager.tokens)}`);
+      console.log('saving...')
+      if (pending.invitee) {
+        console.log('...a meeting')
+        new Meeting({
+          subject: pending.subject,
+          date: pending.date,
+          time: pending.time,
+          invitees: pending.invitee,
+          location: '',
+          length: '',
+          created: '',
+          user: messager._id,
+          channel: messager.channel
+        }).save(function(err, savedMeeting) {
+          if (err) {
+            console.log(err)
+          } else {
+            console.log('CONFIRMED MEETING', savedMeeting);
+            var formatSubject = pending.subject.split(' ').join('_')
+            var formatInvitees = pending.invitee.join('_')
+            if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
+              res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}&time=${pending.time}&invitees=${formatInvitees}`);
+            } else {
+              res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}&time=${pending.time}&invitees=${formatInvitees}`);
+            }
+          }
+        })
       } else {
-        res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${pending.subject}&date=${pending.date}`);
+        console.log('...a remidner')
+        new Reminder({
+          subject: pending.subject,
+          date: pending.date,
+          user: messager._id,
+          channel: messager.channel
+        }).save(function(err) {
+          console.log('CONFIRMED REMINDER', pending);
+          var formatSubject = pending.subject.split(' ').join('_')
+          if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
+            res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}`);
+            //res.send(200);
+          } else {
+            res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}`);
+          }
+        })
       }
     }
     messager.pending = '';
     messager.save();
   })
 })
-
 
 module.exports = router;
