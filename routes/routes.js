@@ -17,33 +17,54 @@ var oauth2Client = new OAuth2(
   'http://localhost:3000/googleauth/callback'
 );
 
-var addEvent = (subject, start, end) => {
-  console.log('IN FUNCTION');
-  var event = {
-    summary: subject,
-    start: {
-      dateTime: new Date(start)
-      // timeZone: 'America/San_Francisco'
-    },
-    end: {
-      dateTime: new Date(end)
-      // timeZone: 'America/San_Francisco'
-    }
-  };
+var addEvent = (subject, invitees, start, end) => {
+  var attendees = [];
+  console.log('INPUT', invitees);
+  var emailsPromise = invitees.map(username => {
+    console.log('USERNAME', username);
+    return User.findOne({ slackRealName: username }).exec()
+  })
+  Promise.all(emailsPromise)
+    .then(users => {
+      users.forEach(user => {
+        console.log('FOUND USER', user.slackEmail);
+        attendees.push({ email: user.slackEmail });
+      })
+      console.log('ATTENDEES EMAIl', attendees);
 
-  var calendar = google.calendar('v3');
-  calendar.events.insert({
-    auth: oauth2Client,
-    calendarId: 'primary',
-    resource: event,
-  }, function(err, e) {
-    if (err) {
+      var event = {
+        summary: subject,
+        // location: '800 Howard St., San Francisco, CA 94103',
+        // description: 'A chance to hear more about Google\'s developer products.',
+        start: {
+          dateTime: new Date(start)
+          // timeZone: 'America/New_York'
+        },
+        end: {
+          dateTime: new Date(end)
+          // timeZone: 'America/New_York'
+        },
+        attendees: attendees
+      };
+
+      var calendar = google.calendar('v3');
+      calendar.events.insert({
+        auth: oauth2Client,
+        calendarId: 'primary',
+        resource: event,
+      }, function(err, e) {
+        if (err) {
+          console.log('ERROR', err);
+          return;
+        }
+        console.log('Event created: %s', e.htmlLink);
+      });
+
+    })
+    .catch(err => {
       console.log('ERROR', err);
-      return;
-    }
-    console.log('Event created: %s', e.htmlLink);
-  });
-}
+    })
+  }
 
 
 google.options({
@@ -83,11 +104,12 @@ router.get('/googleauth/callback', (req, res) => {
       startDate = new Date(req.query.date + 'T' + req.query.time + '-07:00').getTime();
       endDate = startDate + (30 * 60 * 1000);
     } else {
-      startDate = new Date(req.query.date).getTime();
+      startDate = new Date(req.query.date + 'T00:00:00-07:00').getTime();
       endDate = startDate + (24 * 60 * 60 * 1000);
     }
     var sub = req.query.subject || 'Meeting';
-    addEvent(sub, startDate, endDate);
+    var invitees = req.query.invitees.split('_').map(sb => sb.split('0').join(' '));
+    addEvent(sub, invitees, startDate, endDate);
     res.send('Event added!');
   } else {
     console.log('NOTAUTHORIZED', JSON.parse(decodeURIComponent(req.query.state)));
@@ -110,10 +132,11 @@ router.get('/googleauth/callback', (req, res) => {
                   startDate = new Date(state.date + 'T' + state.time + '-07:00').getTime();
                   endDate = startDate + (30 * 60 * 1000);
                 } else {
-                  startDate = new Date(state.date).getTime();
+                  startDate = new Date(state.date + 'T00:00:00-07:00').getTime();
                   endDate = startDate + (24 * 60 * 60 * 1000);
                 }
-                addEvent(state.subject, startDate, endDate);
+                var invitees = state.invitees.split('_').map(sb => sb.split('0').join(' '));
+                addEvent(state.subject, invitees, startDate, endDate);
               })
           })
           .catch(err => {
