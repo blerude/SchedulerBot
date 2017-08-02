@@ -5,6 +5,7 @@ var WebClient = require('@slack/client').WebClient;
 var axios = require('axios')
 var User = require('../models.js').User;
 var Reminder = require('../models.js').Reminder;
+var Meeting = require('../models.js').Meeting;
 
 /*
  * Example for creating and working with the Slack RTM API.
@@ -20,8 +21,6 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
   for (const c of rtmStartData.channels) {
       if (c.name === 'general') { channel = c.id }
   }
-
-  console.log('RTMSTARTDATA', rtmStartData);
 
   var today = new Date().getTime();
   var tomorrow = today + (1000 * 60 * 60 * 24)
@@ -114,14 +113,18 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
               foundUser.save()
               .then(resp2 => {
                 // console.log('response2: ', resp2)
+                var params = response.data.result.parameters;
+                var confirmation;
+                if (params.time) {
+                  confirmation = "Meeting on " + params.date + " at " + params.time + " with " + params.invitees + " to " + params.subject + ", correct?";
+                } else {
+                  confirmation = "Reminder to " + params.subject + " on " + params.date + ", correct?";
+                }
                 var interactive = {
                   text: response.data.result.fulfillment.speech,
                   attachments: [
                     {
-                      text: "Reminder to " +
-                        response.data.result.parameters.subject +
-                        " on " + response.data.result.parameters.date +
-                        ", correct?",
+                      text: confirmation,
                       fallback: "You could not confirm your meeting",
                       callback_id: "wopr_game",
                       color: "#3AA3E3",
