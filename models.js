@@ -24,7 +24,7 @@ var meetingSchema =  mongoose.Schema({
   time:String,
   subject: String,
   date: String,
-  invitees:String,
+  invitees:Array,
   location:String,
   length:String,
   created:String,

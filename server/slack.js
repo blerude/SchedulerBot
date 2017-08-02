@@ -150,7 +150,7 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
               });
             })
           } else if(response.data.result.action === 'addMeeting'){
-            if (!response.data.result.actionIncomplete ) {
+            if (!response.data.result.actionIncomplete&& Object.keys(response.data.result.parameters).length !== 0 ) {
             // && Object.keys(response.data.result.parameters).length !== 0
             User.findOne({ slackId: message.user }, function(err, foundUser) {
               if (err) {
