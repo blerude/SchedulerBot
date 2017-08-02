@@ -59,7 +59,6 @@ var addEvent = (subject, invitees, start, end) => {
         }
         console.log('Event created: %s', e.htmlLink);
       });
-
     })
     .catch(err => {
       console.log('ERROR', err);
