@@ -32,6 +32,8 @@ var models = require('./models');
 
 var routes = require('./routes/routes');
 var app = express();
+var reminders = require('./server/reminders.js')
+// reminders();
 
 // view engine setup
 var hbs = require('express-handlebars')({
