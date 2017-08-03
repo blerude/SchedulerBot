@@ -6,6 +6,8 @@ var axios = require('axios')
 var User = require('../models.js').User;
 var Reminder = require('../models.js').Reminder;
 var Meeting = require('../models.js').Meeting;
+var oauth2Client = require('../routes/routes.js').oauth2Client;
+var google = require('googleapis');
 
 /*
  * Example for creating and working with the Slack RTM API.
@@ -31,6 +33,7 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
       }
     })
   })
+
 
   console.log('sending')
   var today = new Date().getTime();
@@ -75,6 +78,44 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
   })
   console.log(`Logged in as ${rtmStartData.self.name} of team ${rtmStartData.team.name}, but not yet connected to a channel`);
 })
+
+function checkFreeBusy(slackId) {
+  console.log('IN CHECKFREEBUSY', oauth2Client);
+  var start = (new Date()).getTime();
+  var end = start + 1000 * 60 * 60 * 24 * 7;
+  var calendar = google.calendar('v3');
+  User.findOne({ slackId: slackId }, function(err, user) {
+    oauth2Client.setCredentials(user.tokens);
+    calendar.events.list({
+      auth: oauth2Client,
+      calendarId: user.slackEmail,
+      timeMin: new Date(start).toISOString(),
+      timeMax: new Date(end).toISOString(),
+      maxResults: 10,
+      singleEvents: true,
+      orderBy: 'startTime'
+    }, function(err, response) {
+      if (err) {
+        console.log('ERROR', err);
+        return;
+      }
+      var events = response.items;
+      if (events.length === 0) {
+        return null;
+      } else {
+        var res = [];
+        for (var i = 0; i < events.length; i++) {
+          var event = events[i];
+          var start = event.start.dateTime || event.start.date;
+          var end = event.end.dateTime || event.end.date;
+          res.push({ start: start, end: end });
+        }
+        console.log(res);
+        return res;
+      }
+    });
+  })
+}
 
 rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
   console.log('USER', message.user, message);
@@ -158,13 +199,13 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                 });
               })
             } else if (response.data.result.action === 'addMeeting') {
-
-              var invitees = response.data.result.parameters.invitee;
-              var pendingInvitees = [];
-              var invPromises = invitees.map(inv => {
-                var realInv = inv.split('@')[1];
-                return User.findOne({ slackId: realInv })
-                .exec()
+                var invitees = response.data.result.parameters.invitee;
+                var pendingInvitees = [];
+                checkFreeBusy(message.user);
+                var invPromises = invitees.map(inv => {
+                  var realInv = inv.split('@')[1];
+                  return User.findOne({ slackId: realInv })
+                  .exec()
               })
               Promise.all(invPromises)
               .then(returnValue => {
@@ -172,7 +213,7 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                   if (!val) {
                     console.log("User not found; can't invite them.")
                   } else {
-                    pendingInvitees.push(val.slackRealName)
+                    pendingInvitees.push(val.slackRealName);
                   }
                 })
 

@@ -66,10 +66,15 @@ var addEvent = (subject, invitees, start, end) => {
   }
 
 
+
 google.options({
   auth: oauth2Client
 });
 
+
+router.get('/test', (req, res) => {
+  res.send(200);
+})
 router.get('/googleoauth', (req, res) => {
   console.log('ID', process.env.GOOGLE_CLIENT_ID);
   var url = oauth2Client.generateAuthUrl({
@@ -158,7 +163,7 @@ router.post('/interactive', (req, res) => {
       var pending = JSON.parse(messager.pending)
       console.log('saving...')
       if (pending.invitee) {
-        console.log('...a meeting')
+        console.log('...a meeting');
         new Meeting({
           subject: pending.subject,
           date: pending.date,
@@ -211,4 +216,7 @@ router.post('/interactive', (req, res) => {
   })
 })
 
-module.exports = router;
+module.exports = {
+  router,
+  oauth2Client
+}
