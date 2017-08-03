@@ -34,18 +34,6 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
     })
   })
 
-  // var today = new Date().getTime();
-  // var tomorrow = today + (1000 * 60 * 60 * 24)
-  // Reminder.find({}, function(err, reminders) {
-  //   reminders.forEach(rem => {
-  //     if (new Date(rem.date).getTime() > today && new Date(rem.date).getTime() < tomorrow) {
-  //       var msg = 'Reminder: You have to ' + rem.subject + ' soon!'
-  //       console.log('hey ' + msg)
-  //       web.chat.postMessage(channel, msg)
-  //     }
-  //   })
-  // })
-
   console.log('sending')
   var today = new Date().getTime();
   var tomorrow = today + (1000 * 60 * 60 * 24);
@@ -90,16 +78,16 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
   console.log(`Logged in as ${rtmStartData.self.name} of team ${rtmStartData.team.name}, but not yet connected to a channel`);
 })
 
-function checkFreeBusy(message) {
+function checkFreeBusy(slackId) {
   console.log('IN CHECKFREEBUSY', oauth2Client);
   var start = (new Date()).getTime();
   var end = start + 1000 * 60 * 60 * 24 * 7;
   var calendar = google.calendar('v3');
-  User.findOne({ slackId: message.user }, function(err, user) {
+  User.findOne({ slackId: slackId }, function(err, user) {
     oauth2Client.setCredentials(user.tokens);
     calendar.events.list({
       auth: oauth2Client,
-      calendarId: 'primary',
+      calendarId: user.slackEmail,
       timeMin: new Date(start).toISOString(),
       timeMax: new Date(end).toISOString(),
       maxResults: 10,
@@ -111,17 +99,18 @@ function checkFreeBusy(message) {
         return;
       }
       var events = response.items;
-      if (events.length == 0) {
-        console.log('No upcoming events found.');
+      if (events.length === 0) {
         return null;
       } else {
-        console.log('Upcoming 10 events:');
-        // return events;
+        var res = [];
         for (var i = 0; i < events.length; i++) {
           var event = events[i];
           var start = event.start.dateTime || event.start.date;
-          console.log('%s - %s', start, event.summary);
+          var end = event.end.dateTime || event.end.date;
+          res.push({ start: start, end: end });
         }
+        console.log(res);
+        return res;
       }
     });
   })
@@ -220,98 +209,103 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
               User.findOne({ slackId: message.user }, function(err, foundUser) {
                 if (err) {
                   console.log(err)
-                } else if (!foundUser) {
-                  members.push(foundUser.slackId)
                 }
               }).then(resp => {
+                members.push(resp.slackId)
                 console.log('members', members)
-                var conflicts = [1]
-                console.log(conflicts)
-                members.forEach(member => {
-                  // conflicts = conflicts.concat(checkFreeBusy(member))
+
+                var conflictsPromise = members.map(member => {
+                  return checkFreeBusy(member).exec();
                 })
-                if (conflicts.length) {
-                  var startTime = new Date(response.data.result.parameters.date + 'T' + response.data.result.parameters.time + '-07:00').getTime();
-                  console.log(startTime)
+                Promise.all(conflictsPromises)
+                .then(returns => {
+                  conflicts = returns.reduce((a, b) => {
+                    return a.concat(b)
+                  }, [])
+                  console.log('new confl: ', conflicts)
+                  if (conflicts.length) {
+                    var startTime = new Date(response.data.result.parameters.date + 'T' + response.data.result.parameters.time + '-07:00').getTime();
+                    console.log('t: ' + startTime)
 
 
-                } else {
-                  var pendingInvitees = [];
-                  var invPromises = invitees.map(inv => {
-                    return User.findOne({ slackId: realInv })
-                    .exec()
-                  })
-                  Promise.all(invPromises)
-                  .then(returnValue => {
-                    returnValue.forEach(val => {
-                      if (!val) {
-                        console.log("User not found; can't invite them.")
-                      } else {
-                        pendingInvitees.push(val.slackRealName)
-                      }
+                  } else {
+                    var pendingInvitees = [];
+                    var invPromises = invitees.map(inv => {
+                      return User.findOne({ slackId: realInv })
+                      .exec()
                     })
-
-                    User.findOne({ slackId: message.user }, function(err, foundUser) {
-                      if (err) {
-                        console.log(err)
-                      } else if (!foundUser.pending) {
-                        foundUser.pending = JSON.stringify({
-                          subject: response.data.result.parameters.subject,
-                          date: response.data.result.parameters.date,
-                          invitee: pendingInvitees,
-                          time: response.data.result.parameters.time
-                        });
-                        foundUser.channel = message.channel
-                      }
-                      foundUser.save()
-                      .then(resp2 => {
-                        var parseList = JSON.parse(resp2.pending).invitee
-                        var inviteeList = parseList.join(', ')
-                        if (response.data.result.parameters.subject){
-                          var text = `Meeting with ${inviteeList} to ${response.data.result.parameters.subject} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
+                    Promise.all(invPromises)
+                    .then(returnValue => {
+                      returnValue.forEach(val => {
+                        if (!val) {
+                          console.log("User not found; can't invite them.")
                         } else {
-                          var text = `Meeting with ${inviteeList} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
+                          pendingInvitees.push(val.slackRealName)
                         }
+                      })
 
-                        var interactive = {
-                          text: response.data.result.fulfillment.speech,
-                          attachments: [
-                            {
-                              text: text,
-                              fallback: "You could not confirm your meeting",
-                              callback_id: "wopr_game",
-                              color: "#3AA3E3",
-                              attachment_type: "default",
-                              actions: [
-                                {
-                                  name: "confim",
-                                  text: "Yes",
-                                  type: "button",
-                                  value: "yes"
-                                },
-                                {
-                                  name: "confirm",
-                                  text: "Cancel",
-                                  type: "button",
-                                  value: "cancel"
-                                }
-                              ]
-                            }
-                          ]
+                      User.findOne({ slackId: message.user }, function(err, foundUser) {
+                        if (err) {
+                          console.log(err)
+                        } else if (!foundUser.pending) {
+                          foundUser.pending = JSON.stringify({
+                            subject: response.data.result.parameters.subject,
+                            date: response.data.result.parameters.date,
+                            invitee: pendingInvitees,
+                            time: response.data.result.parameters.time
+                          });
+                          foundUser.channel = message.channel
                         }
-                        web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
-                          // if (err) {
-                          //   console.log('Error:', err);
-                          // } else {
-                          //   console.log('Message sent interactive: ', res);
-                          // }
-                        })
-                      }).catch(function (error) {
-                        console.log('uh oh' + error);
-                      });
+                        foundUser.save()
+                        .then(resp2 => {
+                          var parseList = JSON.parse(resp2.pending).invitee
+                          var inviteeList = parseList.join(', ')
+                          if (response.data.result.parameters.subject){
+                            var text = `Meeting with ${inviteeList} to ${response.data.result.parameters.subject} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
+                          } else {
+                            var text = `Meeting with ${inviteeList} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
+                          }
+
+                          var interactive = {
+                            text: response.data.result.fulfillment.speech,
+                            attachments: [
+                              {
+                                text: text,
+                                fallback: "You could not confirm your meeting",
+                                callback_id: "wopr_game",
+                                color: "#3AA3E3",
+                                attachment_type: "default",
+                                actions: [
+                                  {
+                                    name: "confim",
+                                    text: "Yes",
+                                    type: "button",
+                                    value: "yes"
+                                  },
+                                  {
+                                    name: "confirm",
+                                    text: "Cancel",
+                                    type: "button",
+                                    value: "cancel"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                          web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+                            // if (err) {
+                            //   console.log('Error:', err);
+                            // } else {
+                            //   console.log('Message sent interactive: ', res);
+                            // }
+                          })
+                        }).catch(function (error) {
+                          console.log('uh oh' + error);
+                        });
+                      })
                     })
-                  })
-                }
+                  }
+                })
               })
             }
           } else {

@@ -30,7 +30,7 @@ mongoose.connect(connect);
 
 var models = require('./models');
 
-var routes = require('./routes/routes').router;
+var routes = require('./routes/routes.js').router;
 var app = express();
 // var reminders = require('./server/reminders.js')
 // reminders();
