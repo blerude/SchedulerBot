@@ -112,7 +112,10 @@ router.get('/googleauth/callback', (req, res) => {
       endDate = startDate + (24 * 60 * 60 * 1000);
     }
     var sub = req.query.subject || 'Meeting';
-    var invitees = req.query.invitees.split('_').map(sb => sb.split('0').join(' '));
+    var invitees = [];
+    if (req.query.invitees) {
+      invitees = req.query.invitees.split('_').map(sb => sb.split('0').join(' '));
+    }
     addEvent(sub, invitees, startDate, endDate);
     res.send('Event added!');
   } else {

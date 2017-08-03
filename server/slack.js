@@ -100,16 +100,15 @@ function checkFreeBusy(slackId) {
       }
       var events = response.items;
       if (events.length === 0) {
-        return null;
+        return [];
       } else {
-        var res = [];
+        var res = null;
         for (var i = 0; i < events.length; i++) {
           var event = events[i];
           var start = event.start.dateTime || event.start.date;
           var end = event.end.dateTime || event.end.date;
-          res.push({ start: start, end: end });
+          res.push({ start: start, end: end, user: event.organizer});
         }
-        console.log('ONE PERSON EVENT', res);
         return res;
       }
     });
@@ -222,12 +221,10 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                   conflicts = returns.reduce((a, b) => {
                     return a.concat(b)
                   }, [])
-                  console.log('new confl: ', conflicts)
+                  console.log('CONFLICTS', conflicts)
                   if (conflicts.length) {
                     var startTime = new Date(response.data.result.parameters.date + 'T' + response.data.result.parameters.time + '-07:00').getTime();
-                    console.log('t: ' + startTime)
-
-
+                    console.log('STARTTIME' + startTime)
                   } else {
                     var pendingInvitees = [];
                     var invPromises = invitees.map(inv => {
@@ -299,12 +296,16 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                             //   console.log('Message sent interactive: ', res);
                             // }
                           })
-                        }).catch(function (error) {
-                          console.log('uh oh' + error);
-                        });
+                        })
                       })
                     })
+                    .catch(error => {
+                      console.log('uh oh' + error);
+                    });
                   }
+                })
+                .catch(err => {
+                  console.log('ERROR', err);
                 })
               })
             }
