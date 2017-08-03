@@ -110,7 +110,7 @@ function checkFreeBusy(slackId) {
           var end = event.end.dateTime || event.end.date;
           res.push({ start: start, end: end });
         }
-        console.log(res);
+        console.log('ONE PERSON EVENT', res);
         return res;
       }
     });
@@ -205,8 +205,8 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                 var invPromises = invitees.map(inv => {
                   var realInv = inv.split('@')[1];
                   return User.findOne({ slackId: realInv })
-                  .exec()
-              })
+                    .exec()
+                })
               Promise.all(invPromises)
               .then(returnValue => {
                 returnValue.forEach(val => {
