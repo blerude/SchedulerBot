@@ -2,6 +2,7 @@ var express = require('express');
 var router = express.Router();
 var Reminder = require('../models.js').Reminder;
 var web = require('./slack.js').web;
+
 // router.get('/grab', (req, res) => {
 var sendReminders = () => {
   console.log('sending')
@@ -21,5 +22,7 @@ var sendReminders = () => {
     })
   })
 }
+
 sendReminders();
+
 module.exports = sendReminders

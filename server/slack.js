@@ -34,7 +34,6 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
     })
   })
 
-
   console.log('sending')
   var today = new Date().getTime();
   var tomorrow = today + (1000 * 60 * 60 * 24);
@@ -199,82 +198,113 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                 });
               })
             } else if (response.data.result.action === 'addMeeting') {
-                var invitees = response.data.result.parameters.invitee;
-                var pendingInvitees = [];
-                checkFreeBusy(message.user);
-                var invPromises = invitees.map(inv => {
-                  var realInv = inv.split('@')[1];
-                  return User.findOne({ slackId: realInv })
-                    .exec()
+
+              // RUN MEETING AVAILABILITY CHECK
+              var conflict = false;
+              var invitees = response.data.result.parameters.invitee;
+              var invitees = invitees.map(inv => {
+                return inv.split('@')[1];
+              })
+              var members = invitees;
+              User.findOne({ slackId: message.user }, function(err, foundUser) {
+                if (err) {
+                  console.log(err)
+                }
+              }).then(resp => {
+                members.push(resp.slackId)
+                console.log('members', members)
+
+                var conflictsPromise = members.map(member => {
+                  return checkFreeBusy(member).exec();
                 })
-              Promise.all(invPromises)
-              .then(returnValue => {
-                returnValue.forEach(val => {
-                  if (!val) {
-                    console.log("User not found; can't invite them.")
+                Promise.all(conflictsPromises)
+                .then(returns => {
+                  conflicts = returns.reduce((a, b) => {
+                    return a.concat(b)
+                  }, [])
+                  console.log('new confl: ', conflicts)
+                  if (conflicts.length) {
+                    var startTime = new Date(response.data.result.parameters.date + 'T' + response.data.result.parameters.time + '-07:00').getTime();
+                    console.log('t: ' + startTime)
+
+
                   } else {
-                    pendingInvitees.push(val.slackRealName);
-                  }
-                })
-
-                User.findOne({ slackId: message.user }, function(err, foundUser) {
-                  if (err) {
-                    console.log(err)
-                  } else if (!foundUser.pending) {
-                    foundUser.pending = JSON.stringify({
-                      subject: response.data.result.parameters.subject,
-                      date: response.data.result.parameters.date,
-                      invitee: pendingInvitees,
-                      time: response.data.result.parameters.time
-                    });
-                    foundUser.channel = message.channel
-                  }
-                  foundUser.save()
-                  .then(resp2 => {
-                    var parseList = JSON.parse(resp2.pending).invitee
-                    var inviteeList = parseList.join(', ')
-                    if (response.data.result.parameters.subject){
-                      var text = `Meeting with ${inviteeList} to ${response.data.result.parameters.subject} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
-                    } else {
-                      var text = `Meeting with ${inviteeList} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
-                    }
-
-                    var interactive = {
-                      text: response.data.result.fulfillment.speech,
-                      attachments: [
-                        {
-                          text: text,
-                          fallback: "You could not confirm your meeting",
-                          callback_id: "wopr_game",
-                          color: "#3AA3E3",
-                          attachment_type: "default",
-                          actions: [
-                            {
-                              name: "confim",
-                              text: "Yes",
-                              type: "button",
-                              value: "yes"
-                            },
-                            {
-                              name: "confirm",
-                              text: "Cancel",
-                              type: "button",
-                              value: "cancel"
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                    web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
-                      // if (err) {
-                      //   console.log('Error:', err);
-                      // } else {
-                      //   console.log('Message sent interactive: ', res);
-                      // }
+                    var pendingInvitees = [];
+                    var invPromises = invitees.map(inv => {
+                      return User.findOne({ slackId: realInv })
+                      .exec()
                     })
-                  }).catch(function (error) {
-                    console.log('uh oh' + error);
-                  });
+                    Promise.all(invPromises)
+                    .then(returnValue => {
+                      returnValue.forEach(val => {
+                        if (!val) {
+                          console.log("User not found; can't invite them.")
+                        } else {
+                          pendingInvitees.push(val.slackRealName)
+                        }
+                      })
+
+                      User.findOne({ slackId: message.user }, function(err, foundUser) {
+                        if (err) {
+                          console.log(err)
+                        } else if (!foundUser.pending) {
+                          foundUser.pending = JSON.stringify({
+                            subject: response.data.result.parameters.subject,
+                            date: response.data.result.parameters.date,
+                            invitee: pendingInvitees,
+                            time: response.data.result.parameters.time
+                          });
+                          foundUser.channel = message.channel
+                        }
+                        foundUser.save()
+                        .then(resp2 => {
+                          var parseList = JSON.parse(resp2.pending).invitee
+                          var inviteeList = parseList.join(', ')
+                          if (response.data.result.parameters.subject){
+                            var text = `Meeting with ${inviteeList} to ${response.data.result.parameters.subject} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
+                          } else {
+                            var text = `Meeting with ${inviteeList} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
+                          }
+
+                          var interactive = {
+                            text: response.data.result.fulfillment.speech,
+                            attachments: [
+                              {
+                                text: text,
+                                fallback: "You could not confirm your meeting",
+                                callback_id: "wopr_game",
+                                color: "#3AA3E3",
+                                attachment_type: "default",
+                                actions: [
+                                  {
+                                    name: "confim",
+                                    text: "Yes",
+                                    type: "button",
+                                    value: "yes"
+                                  },
+                                  {
+                                    name: "confirm",
+                                    text: "Cancel",
+                                    type: "button",
+                                    value: "cancel"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                          web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+                            // if (err) {
+                            //   console.log('Error:', err);
+                            // } else {
+                            //   console.log('Message sent interactive: ', res);
+                            // }
+                          })
+                        }).catch(function (error) {
+                          console.log('uh oh' + error);
+                        });
+                      })
+                    })
+                  }
                 })
               })
             }
