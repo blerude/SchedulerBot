@@ -67,14 +67,6 @@ var addEvent = (subject, invitees, start, end) => {
 
 
 
-google.options({
-  auth: oauth2Client
-});
-
-
-router.get('/test', (req, res) => {
-  res.send(200);
-})
 router.get('/googleoauth', (req, res) => {
   console.log('ID', process.env.GOOGLE_CLIENT_ID);
   var url = oauth2Client.generateAuthUrl({
@@ -142,7 +134,10 @@ router.get('/googleauth/callback', (req, res) => {
                   startDate = new Date(state.date + 'T00:00:00-07:00').getTime();
                   endDate = startDate + (24 * 60 * 60 * 1000);
                 }
-                var invitees = state.invitees.split('_').map(sb => sb.split('0').join(' '));
+                var invitees = [];
+                if (state.invitees !== undefined) {
+                  invitees = state.invitees.split('_').map(sb => sb.split('0').join(' '));
+                }
                 addEvent(state.subject, invitees, startDate, endDate);
               })
           })
@@ -158,11 +153,18 @@ router.get('/googleauth/callback', (req, res) => {
 router.post('/interactive', (req, res) => {
   console.log('IN INTERACTIVE');
   var string = JSON.parse(req.body.payload);
+  //console.log('STRING', string);
+  //console.log('VALUE', string.actions[0].selected_options[0].value);
   User.findOne({slackId: string.user.id}, function(err, messager) {
+    if (string.actions[0].value) {
+
+    }
+
     if (string.actions[0].value === 'cancel') {
       console.log('CANCELLED!')
       res.send('Scheduler cancelled');
     } else {
+      console.log('MESSAGER', messager);
       var pending = JSON.parse(messager.pending)
       console.log('saving...')
       if (pending.invitee) {
@@ -184,7 +186,7 @@ router.post('/interactive', (req, res) => {
             console.log('CONFIRMED MEETING', savedMeeting);
             var formatSubject = pending.subject.split(' ').join('_')
             var stringInvitees = pending.invitee.map(inv => {
-              return inv.split(' ').join('0')
+              return inv.split(' ').join('0');
             })
             console.log('invitee string' + stringInvitees)
             var formatInvitees = stringInvitees.join('_')
