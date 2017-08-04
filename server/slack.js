@@ -8,6 +8,7 @@ var Reminder = require('../models.js').Reminder;
 var Meeting = require('../models.js').Meeting;
 var oauth2Client = require('../routes/routes.js').oauth2Client;
 var google = require('googleapis');
+var _ = require('underscore')
 
 /*
 * Example for creating and working with the Slack RTM API.
@@ -80,7 +81,7 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
 
 function checkFreeBusy(slackId) {
   return new Promise(function(resolve, reject) {
-    console.log('IN CHECKFREEBUSY', oauth2Client);
+    console.log('IN CHECKFREEBUSY', oauth2Client, slackId);
     var start = (new Date()).getTime();
     var end = start + 1000 * 60 * 60 * 24 * 7;
     var calendar = google.calendar('v3');
@@ -89,6 +90,7 @@ function checkFreeBusy(slackId) {
         reject(err);
         return;
       }
+      console.log('user', user)
       oauth2Client.setCredentials(user.tokens);
       calendar.events.list({
         auth: oauth2Client,
@@ -207,7 +209,6 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
             } else if (response.data.result.action === 'addMeeting') {
 
               // RUN MEETING AVAILABILITY CHECK
-              var conflict = false;
               var invitees = response.data.result.parameters.invitee;
               var invitees = invitees.map(inv => {
                 return inv.split('@')[1];
@@ -223,51 +224,178 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
 
                 var conflictsPromise = members.map(member => {
                   console.log("WE'RE CHECKING " + member)
-                  return checkFreeBusy(member);
+                  if (member) return checkFreeBusy(member);
                 })
                 return Promise.all(conflictsPromise)
               })
               .then(returns => {
-                var conflicts = returns.reduce((a, b) => {
+                var events = returns.reduce((a, b) => {
                   console.log(a, b)
                   return a.concat(b)
                 })
-                console.log('new confl: ', conflicts)
-                if (conflicts.length) {
-                  var startTime = new Date(response.data.result.parameters.date + 'T' + response.data.result.parameters.time + '-07:00').getTime();
-                  console.log('t: ' + startTime)
 
+                console.log('EVENTS', events)
+                eventss = []
+                events.forEach(ev => {
+                  if (ev) eventss.push(ev)
+                })
+                events = eventss;
+                console.log('AFTER EVENTS', events)
 
-                } else {
-                  var pendingInvitees = [];
-                  var invPromises = invitees.map(inv => {
-                    return User.findOne({ slackId: realInv })
-                    .exec()
+                var newStart = new Date(response.data.result.parameters.date + 'T' + response.data.result.parameters.time + '-07:00').getTime();
+                var newEnd = newStart + 1000 * 60 * 30
+
+                var conflict = false;
+                events.forEach(event => {
+                  if ((newStart >= new Date(event.start).getTime() && newStart <= new Date(event.end).getTime()) ||
+                  (newEnd >= new Date(event.start).getTime() && newEnd <= new Date(event.end).getTime())) {
+                    console.log('FOUND A CONFLICT')
+                    conflict = true;
+                  }
+                })
+
+                var pendingInvitees = [];
+                var invPromises = invitees.map(inv => {
+                  return User.findOne({ slackId: inv })
+                  .exec()
+                })
+                Promise.all(invPromises)
+                .then(returnValue => {
+                  returnValue.forEach(val => {
+                    if (!val) {
+                      console.log("User not found; can't invite them.")
+                    } else {
+                      pendingInvitees.push(val.slackRealName)
+                    }
                   })
-                  Promise.all(invPromises)
-                  .then(returnValue => {
-                    returnValue.forEach(val => {
-                      if (!val) {
-                        console.log("User not found; can't invite them.")
-                      } else {
-                        pendingInvitees.push(val.slackRealName)
-                      }
-                    })
 
-                    User.findOne({ slackId: message.user }, function(err, foundUser) {
-                      if (err) {
-                        console.log(err)
-                      } else if (!foundUser.pending) {
-                        foundUser.pending = JSON.stringify({
-                          subject: response.data.result.parameters.subject,
-                          date: response.data.result.parameters.date,
-                          invitee: pendingInvitees,
-                          time: response.data.result.parameters.time
-                        });
-                        foundUser.channel = message.channel
-                      }
-                      foundUser.save()
-                      .then(resp2 => {
+                  User.findOne({ slackId: message.user }, function(err, foundUser) {
+                    if (err) {
+                      console.log(err)
+                    } else if (!foundUser.pending) {
+                      foundUser.pending = JSON.stringify({
+                        subject: response.data.result.parameters.subject,
+                        date: response.data.result.parameters.date,
+                        invitee: pendingInvitees.slice(0, pendingInvitees.length - 1),
+                        time: response.data.result.parameters.time
+                      });
+                      foundUser.channel = message.channel
+                    }
+                    foundUser.save()
+                    .then(resp2 => {
+
+                      // CONFLICTS
+                      if (conflict) {
+
+                        console.log('CONFLICT!!! CHANGE TIME');
+                        var aDay = 86400000;
+                        var now = new Date().getTime();
+                        var nextMidnight = now - now%aDay;
+                        var halfHour = aDay/48;
+                        var available = [];
+                        var count = 0;
+
+                        while( count < 10 ) {
+                          var dayCount = 0;
+                          nextMidnight += aDay;
+                          var aDayTimes = [];
+                          _.range(8,21).forEach(hour => {
+                            aDayTimes.push({start: nextMidnight+hour*60*60*1000, end: nextMidnight+hour*60*60*1000+halfHour});
+                            aDayTimes.push({start: nextMidnight+hour*60*60*1000+halfHour, end: nextMidnight+(hour+1)*60*60*1000});
+                          })
+                          while (dayCount < 3) {
+                            for (var i in aDayTimes) {
+                              var slot = aDayTimes[i];
+                              for (var j in events) {
+                                if (!((slot.start > new Date(events[j].start).getTime() && new Date(events[j].end).getTime()) || (slot.end > new Date(events[j].start).getTime() && slot.start < new Date(events[j].end).getTime()))) {
+                                  if (dayCount < 3 && count < 10) {
+                                    console.log('ONE MORE SLOT', new Date(slot.start));
+                                    available.push(slot);
+                                    dayCount++;
+                                    count++;
+                                    break;
+                                  }
+                                }
+                              }
+                              if (count === 10) dayCount = 3;
+                            }
+                          }
+                          console.log('new day')
+                        }
+
+                        console.log('A DAY', available);
+                        var dropDown = {
+                          text: "When would you like to meet?",
+                          response_type: "in_channel",
+                          attachments: [{
+                            text: "Choose another time^",
+                            fallback: "Meeting cancelled.",
+                            color: "#3AA3E3",
+                            attachment_type: "default",
+                            callback_id: "game_selection",
+                            actions: [{
+                              name: "time_list",
+                              text: "Pick a time...",
+                              type: "select",
+                              options: [
+                                {
+                                  text: new Date(available[0].start + (1000 * 60 * 60 * 7)).toString(),
+                                  value: '0',
+                                },
+                                {
+                                  text: new Date(available[1].start + (1000 * 60 * 60 * 7)).toString(),
+                                  value: '1'
+                                },
+                                {
+                                  text: new Date(available[2].start + (1000 * 60 * 60 * 7)).toString(),
+                                  value: '2'
+                                },
+                                {
+                                  text: new Date(available[3].start + (1000 * 60 * 60 * 7)).toString(),
+                                  value: '3'
+                                },
+                                {
+                                  text: new Date(available[4].start + (1000 * 60 * 60 * 7)).toString(),
+                                  value: '4'
+                                },
+                                {
+                                  text: new Date(available[5].start + (1000 * 60 * 60 * 7)).toString(),
+                                  value: '5'
+                                },
+                                {
+                                  text: new Date(available[6].start + (1000 * 60 * 60 * 7)).toString(),
+                                  value: '6'
+                                },
+                                {
+                                  text: new Date(available[7].start + (1000 * 60 * 60 * 7)).toString(),
+                                  value: '7'
+                                },
+                                {
+                                  text: new Date(available[8].start + (1000 * 60 * 60 * 7)).toString(),
+                                  value: '8'
+                                },
+                                {
+                                  text: new Date(available[9].start + (1000 * 60 * 60 * 7)).toString(),
+                                  value: '9'
+                                },
+                                {
+                                  text: 'Never mind, cancel meeting.',
+                                  value: 'cancel'
+                                }
+                              ]
+                            }]
+                          }]
+                        }
+
+                        web.chat.postMessage(message.channel, "Time conflict!", dropDown, function(err, res) {
+                          if (err) {
+                            console.log('ERROR', err);
+                          } else {
+                            console.log('DROPDOWN SENT', res);
+                          }
+                        })
+
+                      } else {
                         var parseList = JSON.parse(resp2.pending).invitee
                         var inviteeList = parseList.join(', ')
                         if (response.data.result.parameters.subject){
@@ -309,33 +437,38 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                           //   console.log('Message sent interactive: ', res);
                           // }
                         })
-                      }).catch(function (error) {
-                        console.log('uh oh' + error);
-                      });
-                    }) // end userFindOne
+                      }
+
+
+                      // }).catch(function (error) {
+                      //   console.log('uh oh' + error);
+                      // });
+                    }).catch(function (error) {
+                      console.log('uh oh' + error);
+                    }); // end userFindOne
                   })
-                }
+                })
               }).catch(function(err) {console.log('BAD! ', err)})
+            }
+          } else {
+            var interactive = {
+              text: response.data.result.fulfillment.speech,
+            };
+            web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+              // if (err) {
+              // console.log('Error:', err);
+              // } else {
+              //   console.log('Message sent interactive: ', res);
+              // }
+            })
           }
-        } else {
-          var interactive = {
-            text: response.data.result.fulfillment.speech,
-          };
-          web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
-            // if (err) {
-            console.log('Error:', err);
-            // } else {
-            //   console.log('Message sent interactive: ', res);
-            // }
-          })
-        }
-      })
-      .catch(function (error) {
-        console.log(error);
-      });
-    }
-  })
-}
+        })
+        .catch(function (error) {
+          console.log(error);
+        });
+      }
+    })
+  }
 });
 
 module.exports = {

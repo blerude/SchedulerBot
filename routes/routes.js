@@ -159,11 +159,13 @@ router.get('/googleauth/callback', (req, res) => {
 router.post('/interactive', (req, res) => {
   console.log('IN INTERACTIVE');
   var string = JSON.parse(req.body.payload);
+  console.log(string)
   User.findOne({slackId: string.user.id}, function(err, messager) {
     if (string.actions[0].value === 'cancel') {
       console.log('CANCELLED!')
       res.send('Scheduler cancelled');
     } else {
+      console.log('messager', messager)
       var pending = JSON.parse(messager.pending)
       console.log('saving...')
       if (pending.invitee) {
@@ -218,10 +220,6 @@ router.post('/interactive', (req, res) => {
     messager.pending = '';
     messager.save();
   })
-})
-
-router.post('/interactive/menu', (req, res) => {
-
 })
 
 module.exports = {
