@@ -155,6 +155,7 @@ router.post('/interactive', (req, res) => {
   var string = JSON.parse(req.body.payload);
   //console.log('STRING', string);
   //console.log('VALUE', string.actions[0].selected_options[0].value);
+  console.log(string)
   User.findOne({slackId: string.user.id}, function(err, messager) {
     if (string.actions[0].value) {
 
@@ -209,7 +210,6 @@ router.post('/interactive', (req, res) => {
           var formatSubject = pending.subject.split(' ').join('_');
           if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
             res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}&tokens=${JSON.stringify(messager.tokens)}`);
-            //res.send(200);
           } else {
             res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}`);
           }
@@ -219,10 +219,6 @@ router.post('/interactive', (req, res) => {
     messager.pending = '';
     messager.save();
   })
-})
-
-router.post('/interactive/menu', (req, res) => {
-
 })
 
 module.exports = {
