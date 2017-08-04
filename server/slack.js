@@ -342,6 +342,7 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                         		value: new Date(time.start).toLocaleString('en-US', { timeZone: "UTC" })
                         	})
                         })
+                        options.push({text: 'Cancel meeting', value: 'cancel'})
                         var dropDown = {
                           text: "When would you like to meet?",
                           response_type: "in_channel",

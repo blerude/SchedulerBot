@@ -159,14 +159,28 @@ router.get('/googleauth/callback', (req, res) => {
 router.post('/interactive', (req, res) => {
   console.log('IN INTERACTIVE');
   var string = JSON.parse(req.body.payload);
+
+  if (string.actions[0].selected_options) {
+    var newMeet = string.actions[0].selected_options[0].value;
+    if (newMeet !== 'cancel') {
+      var day = new Date(newMeet);
+      var offset = day.getTimezoneOffset()*60*1000;
+      var newDate = new Date(day.getTime() - offset).toISOString().split('T')
+    }
+  }
+
   console.log(string)
   User.findOne({slackId: string.user.id}, function(err, messager) {
-    if (string.actions[0].value === 'cancel') {
+    if (string.actions[0].value === 'cancel' || newMeet === 'cancel') {
       console.log('CANCELLED!')
       res.send('Scheduler cancelled');
     } else {
       console.log('messager', messager)
       var pending = JSON.parse(messager.pending)
+      if (newDate) {
+        pending.date = newDate[0]
+        pending.time = newDate[1].slice(0, 8)
+      }
       console.log('saving...')
       if (pending.invitee) {
         console.log('...a meeting');
