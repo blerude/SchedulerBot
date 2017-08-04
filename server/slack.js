@@ -209,7 +209,9 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
             } else if (response.data.result.action === 'addMeeting') {
 
               // RUN MEETING AVAILABILITY CHECK
-              var invitees = response.data.result.parameters.invitee;
+              var params = response.data.result.parameters;
+              var invitees = params.invitee;
+              console.log('PARAMS', params);
               var invitees = invitees.map(inv => {
                 return inv.split('@')[1];
               })
@@ -223,7 +225,7 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                 console.log('members', members)
 
                 if (!(resp.tokens  && resp.tokens.expiry_date > new Date().getTime())) {
-                  web.chat.postMessage(message.channel, `http://localhost:3000/googleoauth?auth_id=${resp.slackId}&subject=${'CHILL'}&date=${'2017-08-05'}&time=${'17:00:00-07:00'}&invitees=${[]}`, function(err, res) {
+                  web.chat.postMessage(message.channel, `http://localhost:3000/googleoauth?auth_id=${resp.slackId}&subject=${params.subject.split(' ').join('_')}&date=${params.date[0]}&time=${params.time[0]}&invitees=${params.invitee}`, function(err, res) {
                     if (err) {
                       console.log('ERROR', err);
                     } else {

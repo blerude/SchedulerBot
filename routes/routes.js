@@ -67,14 +67,6 @@ var addEvent = (subject, invitees, start, end) => {
 
 
 
-google.options({
-  auth: oauth2Client
-});
-
-
-router.get('/test', (req, res) => {
-  res.send(200);
-})
 router.get('/googleoauth', (req, res) => {
   console.log('ID', process.env.GOOGLE_CLIENT_ID);
   var url = oauth2Client.generateAuthUrl({
@@ -112,10 +104,9 @@ router.get('/googleauth/callback', (req, res) => {
       endDate = startDate + (24 * 60 * 60 * 1000);
     }
     var sub = req.query.subject || 'Meeting';
+    var invitees = [];
     if (req.query.invitees) {
-      var invitees = req.query.invitees.split('_').map(sb => sb.split('0').join(' '));
-    } else {
-      var invitees = []
+      invitees = req.query.invitees.split('_').map(sb => sb.split('0').join(' '));
     }
     addEvent(sub, invitees, startDate, endDate);
     res.send('Event added!');
@@ -143,7 +134,10 @@ router.get('/googleauth/callback', (req, res) => {
                   startDate = new Date(state.date + 'T00:00:00-07:00').getTime();
                   endDate = startDate + (24 * 60 * 60 * 1000);
                 }
-                var invitees = state.invitees.split('_').map(sb => sb.split('0').join(' '));
+                var invitees = [];
+                if (state.invitees !== undefined) {
+                  invitees = state.invitees.split('_').map(sb => sb.split('0').join(' '));
+                }
                 addEvent(state.subject, invitees, startDate, endDate);
               })
           })
@@ -175,7 +169,7 @@ router.post('/interactive', (req, res) => {
       console.log('CANCELLED!')
       res.send('Scheduler cancelled');
     } else {
-      console.log('messager', messager)
+      console.log('MESSAGER', messager);
       var pending = JSON.parse(messager.pending)
       if (newDate) {
         pending.date = newDate[0]
@@ -201,7 +195,7 @@ router.post('/interactive', (req, res) => {
             console.log('CONFIRMED MEETING', savedMeeting);
             var formatSubject = pending.subject.split(' ').join('_')
             var stringInvitees = pending.invitee.map(inv => {
-              return inv.split(' ').join('0')
+              return inv.split(' ').join('0');
             })
             console.log('invitee string' + stringInvitees)
             var formatInvitees = stringInvitees.join('_')
@@ -224,7 +218,6 @@ router.post('/interactive', (req, res) => {
           var formatSubject = pending.subject.split(' ').join('_');
           if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
             res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}&tokens=${JSON.stringify(messager.tokens)}`);
-            //res.send(200);
           } else {
             res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}`);
           }
