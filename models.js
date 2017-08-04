@@ -30,7 +30,9 @@ var meetingSchema =  mongoose.Schema({
   invitees: Array,
   location: String,
   length: String,
-  created: String,
+  created: Boolean,
+  createdAt: Number,
+  cancelIn2Hours: Boolean,
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'

@@ -7,6 +7,9 @@ var Meeting = models.Meeting;
 var google = require('googleapis');
 var OAuth2 = google.auth.OAuth2;
 var axios = require('axios');
+var WebClient = require('@slack/client').WebClient;
+var webToken = process.env.SLACK_API_TOKEN || ''; //see section above on sensitive data
+var web = new WebClient(webToken);
 
 //////////////////////////////// PUBLIC ROUTES ////////////////////////////////
 // Users who are not logged in can see these routes
@@ -125,20 +128,20 @@ router.get('/googleauth/callback', (req, res) => {
               .then(user => {
                 console.log('SAVED', user);
                 var state = JSON.parse(decodeURIComponent(req.query.state));
-                var startDate;
-                var endDate;
+                var startDate = 0;
+                var endDate = 0;
+                var invitees = [];
                 if (state.time !== undefined) {
                   startDate = new Date(state.date + 'T' + state.time + '-07:00').getTime();
                   endDate = startDate + (30 * 60 * 1000);
+                  invitees = state.invitees.split('_').map(sb => sb.split('0').join(' '));
+                  res.send('You are authorized! Now go back to Slack and schdule the meeting with your bot! ^');
                 } else {
                   startDate = new Date(state.date + 'T00:00:00-07:00').getTime();
                   endDate = startDate + (24 * 60 * 60 * 1000);
+                  addEvent(state.subject, invitees, startDate, endDate);
+                  res.redirect('https://calendar.google.com/calendar');
                 }
-                var invitees = [];
-                if (state.invitees !== undefined) {
-                  invitees = state.invitees.split('_').map(sb => sb.split('0').join(' '));
-                }
-                addEvent(state.subject, invitees, startDate, endDate);
               })
           })
           .catch(err => {
@@ -146,27 +149,118 @@ router.get('/googleauth/callback', (req, res) => {
           })
         }
     });
-    res.redirect('https://calendar.google.com/calendar');
   }
 })
 
 router.post('/interactive', (req, res) => {
   console.log('IN INTERACTIVE');
   var string = JSON.parse(req.body.payload);
-  //console.log('STRING', string);
-  //console.log('VALUE', string.actions[0].selected_options[0].value);
+  console.log('STRINGGG', string);
+  if (string.actions[0].selected_options) {
+    var newMeet = string.actions[0].selected_options[0].value;
+    if (newMeet !== 'cancel') {
+      var day = new Date(newMeet);
+      var offset = day.getTimezoneOffset()*60*1000;
+      var newDate = new Date(day.getTime() - offset).toISOString().split('T')
+    }
+  }
+
   console.log(string)
   User.findOne({slackId: string.user.id}, function(err, messager) {
-    if (string.actions[0].value) {
-
-    }
-
-    if (string.actions[0].value === 'cancel') {
+    if (string.actions[0].value === 'cancel' || newMeet === 'cancel') {
       console.log('CANCELLED!')
       res.send('Scheduler cancelled');
+      messager.pending = '';
+      messager.save();
+    } else if (string.actions[0].value === 'scheduleMeeting' || string.actions[0].value === 'cancelIn2Hours') {
+      res.send("We'll check in 2 hours");
+      console.log('MESSANGERE', messager)
+      var pending = JSON.parse(messager.pending)
+
+      if (string.actions[0].value === 'scheduleMeeting') {
+        var cancel = false
+      } else {
+        var cancel = true;
+      }
+      new Meeting({
+        subject: pending.subject,
+        date: pending.date,
+        time: pending.time,
+        invitees: pending.invitee,
+        location: '',
+        length: '',
+        created: false,
+        createdAt: new Date().getTime() - 7*60*60*1000,
+        cancelIn2Hours: cancel,
+        user: messager._id,
+        channel: messager.channel
+      }).save((err, saved) => {
+        messager.pending = '';
+        messager.save();
+      });
+
+    } else if (string.actions[0].value === 'sendRequest') {
+      var prompt2 = {
+        text: "2 HOUR CONFIRMATION",
+        attachments: [
+          {
+            text: "Schedule the meeting anyway if invitees don't repond in 2 hours?",
+            fallback: "You could not confirm your meeting",
+            callback_id: "meeting",
+            color: "#3AA3E3",
+            attachment_type: "default",
+            actions: [
+              {
+                name: "confim",
+                text: "Yes",
+                type: "button",
+                value: "scheduleMeeting"
+              },
+              {
+                name: "confirm",
+                text: "Cancel",
+                type: "button",
+                value: "cancelIn2Hours"
+              }
+            ]
+          }
+        ]
+      }
+
+      web.chat.postMessage(string.channel.id, "2 hour", prompt2, function(err, res) {
+        if (err) {
+          console.log('ERROR', err);
+        } else {
+          console.log('SCHEDULE 2 SENT', res);
+        }
+      })
+
+      var pending = JSON.parse(messager.pending)
+      console.log('INVITEES', pending);
+      pending.invitee.forEach(inv => {
+        var id = inv.slice(2);
+        User.findOne({slackId: id}, function(err, user) {
+          if (err) console.log('ERROR', err);
+          else {
+            web.chat.postMessage('@' + user.slackUsername, `Please authorize your Google Calendar for a meeting: http://localhost:3000/googleoauth?auth_id=${id}`, function(err, res) {
+              if (err) {
+                console.log('ERROR', err);
+              } else {
+                console.log('AUTH TO INVITEE SENT', res);
+              }
+            })
+          }
+        })
+      })
+      res.send('HEYY PROMPT HAS BEEN MADE');
+
     } else {
       console.log('MESSAGER', messager);
       var pending = JSON.parse(messager.pending)
+      if (newDate) {
+        pending.date = newDate[0]
+        pending.time = newDate[1].slice(0, 8)
+      }
       console.log('saving...')
       if (pending.invitee) {
         console.log('...a meeting');
@@ -177,7 +271,7 @@ router.post('/interactive', (req, res) => {
           invitees: pending.invitee,
           location: '',
           length: '',
-          created: '',
+          created: true,
           user: messager._id,
           channel: messager.channel
         }).save(function(err, savedMeeting) {
@@ -194,7 +288,7 @@ router.post('/interactive', (req, res) => {
             if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
               res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}&time=${pending.time}&invitees=${formatInvitees}&tokens=${JSON.stringify(messager.tokens)}`);
             } else {
-              res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}&time=${pending.time}&invitees=${formatInvitees}`);
+              res.send(`Oops! You need to authorize your Google Calendar first:: http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}&time=${pending.time}&invitees=${formatInvitees}`);
             }
           }
         })
@@ -211,13 +305,11 @@ router.post('/interactive', (req, res) => {
           if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
             res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}&tokens=${JSON.stringify(messager.tokens)}`);
           } else {
-            res.send(`http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}`);
+            res.send(`Oops! You need to authorize your Google Calendar first:: http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}`);
           }
         })
       }
     }
-    messager.pending = '';
-    messager.save();
   })
 })
 
