@@ -222,6 +222,16 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                 members.push(resp.slackId)
                 console.log('members', members)
 
+                if (!(resp.tokens  && resp.tokens.expiry_date > new Date().getTime())) {
+                  web.chat.postMessage(message.channel, `http://localhost:3000/googleoauth?auth_id=${resp.slackId}&subject=${'CHILL'}&date=${'2017-08-05'}&time=${'17:00:00-07:00'}&invitees=${[]}`, function(err, res) {
+                    if (err) {
+                      console.log('ERROR', err);
+                    } else {
+                      console.log('AUTH SENT', res);
+                    }
+                  })
+                }
+
                 var conflictsPromise = members.map(member => {
                   console.log("WE'RE CHECKING " + member)
                   if (member) return checkFreeBusy(member);
@@ -324,6 +334,14 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                         }
 
                         console.log('A DAY', available);
+                        var options = [];
+                        var options = [];
+                        available.forEach(time => {
+                        	options.push({
+                        		text: new Date(time.start).toLocaleString('en-US', { timeZone: "UTC" }),
+                        		value: new Date(time.start).toLocaleString('en-US', { timeZone: "UTC" })
+                        	})
+                        })
                         var dropDown = {
                           text: "When would you like to meet?",
                           response_type: "in_channel",
@@ -337,52 +355,7 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                               name: "time_list",
                               text: "Pick a time...",
                               type: "select",
-                              options: [
-                                {
-                                  text: new Date(available[0].start + (1000 * 60 * 60 * 7)).toString(),
-                                  value: '0',
-                                },
-                                {
-                                  text: new Date(available[1].start + (1000 * 60 * 60 * 7)).toString(),
-                                  value: '1'
-                                },
-                                {
-                                  text: new Date(available[2].start + (1000 * 60 * 60 * 7)).toString(),
-                                  value: '2'
-                                },
-                                {
-                                  text: new Date(available[3].start + (1000 * 60 * 60 * 7)).toString(),
-                                  value: '3'
-                                },
-                                {
-                                  text: new Date(available[4].start + (1000 * 60 * 60 * 7)).toString(),
-                                  value: '4'
-                                },
-                                {
-                                  text: new Date(available[5].start + (1000 * 60 * 60 * 7)).toString(),
-                                  value: '5'
-                                },
-                                {
-                                  text: new Date(available[6].start + (1000 * 60 * 60 * 7)).toString(),
-                                  value: '6'
-                                },
-                                {
-                                  text: new Date(available[7].start + (1000 * 60 * 60 * 7)).toString(),
-                                  value: '7'
-                                },
-                                {
-                                  text: new Date(available[8].start + (1000 * 60 * 60 * 7)).toString(),
-                                  value: '8'
-                                },
-                                {
-                                  text: new Date(available[9].start + (1000 * 60 * 60 * 7)).toString(),
-                                  value: '9'
-                                },
-                                {
-                                  text: 'Never mind, cancel meeting.',
-                                  value: 'cancel'
-                                }
-                              ]
+                              options: options
                             }]
                           }]
                         }
