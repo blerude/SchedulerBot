@@ -41,46 +41,58 @@ rtm.on(CLIENT_EVENTS.RTM.AUTHENTICATED, (rtmStartData) => {
       if (err) console.log('ERROR', err);
       else {
         meetings.forEach(meeting => {
-          if (now - meeting.createdAt < 80*1000) {
-            var allAuthorized = true;
-            var inviteesStr = meeting.invitees.join(', ');
-            meeting.invitees.forEach(inv => {
-              if (!(inv.tokens  && inv.tokens.expiry_date > new Date().getTime() - 7*60*60*1000)) {
-                allAuthorized = false;
+          var allAuthorized = true;
+
+          var inviteesStr = meeting.invitees.join(', ');
+          console.log('adsfl;djsf', inviteesStr)
+          var meetingPromise = meeting.invitees.map(inv => {
+            console.log('inv' + inv)
+            return User.findOne({slackId: inv.slice(2) }).exec()
+          })
+          Promise.all(meetingPromise)
+          .then(result => {
+              result.forEach(invit => {
+                if (!(invit.tokens && invit.tokens.expiry_date > new Date().getTime() - 7*60*60*1000)) {
+                  allAuthorized = false;
+                }
+              })
+              console.log(allAuthorized)
+              if (now - meeting.createdAt < 50*1000) {
+                console.log('IN 100S');
+                if (allAuthorized === true) {
+                  console.log('ALL AUTH');
+                  web.chat.postMessage(meeting.channel, `You can now initialize your meeting to ${meeting.subject} at ${meeting.date}, ${meeting.time} with ${inviteesStr}`, function(err, res) {
+                    if (err) {
+                      console.log('ERROR', err);
+                    } else {
+                      console.log('NOTIFICATION SENT', res);
+                      meeting.created = true;
+                      meeting.save();
+                    }
+                  })
+                }
+              } else {
+                if (meeting.cancelIn2Hours && !allAuthorized) {
+                  meeting.remove();
+                } else {
+                  web.chat.postMessage(meeting.channel, `You are free to initialize your meeting to ${meeting.subject} at ${meeting.date}, ${meeting.time} with ${inviteesStr}`, function(err, res) {
+                    if (err) {
+                      console.log('ERROR', err);
+                    } else {
+                      console.log('NOTIFICATION SENT', res);
+                      meeting.created = true;
+                      meeting.save();
+                    }
+                  })
+                }
               }
-            })
-            if (allAuthorized === true) {
-              web.chat.postMessage(meeting.channel, `You can now initialize your meeting to ${meeting.subject} at ${meeting.date}, ${meeting.time} with ${inviteesStr}`, function(err, res) {
-                if (err) {
-                  console.log('ERROR', err);
-                } else {
-                  console.log('NOTIFICATION SENT', res);
-                  meeting.created = true;
-                  meeting.save();
-                }
-              })
-            }
-          } else {
-            if (meeting.cancelIn2Hours) {
-              meeting.remove();
-            } else {
-              web.chat.postMessage(meeting.channel, `You are free to initialize your meeting to ${meeting.subject} at ${meeting.date}, ${meeting.time} with ${inviteesStr}`, function(err, res) {
-                if (err) {
-                  console.log('ERROR', err);
-                } else {
-                  console.log('NOTIFICATION SENT', res);
-                  meeting.created = true;
-                  meeting.save();
-                }
-              })
-            }
-          }
+          }).catch(err => {console.log('prom error', err)});
         })
       }
     })
   }
 
-  setInterval(checkPendingMeeting, 30*1000);
+  setInterval(checkPendingMeeting, 20*1000);
 
   console.log('sending')
   var today = new Date().getTime();
@@ -212,46 +224,46 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                     subject: response.data.result.parameters.subject,
                     date: response.data.result.parameters.date,
                   });
-                  foundUser.channel = message.channel;
-                  foundUser.save()
-                  .then(resp2 => {
-                    var interactive = {
-                      text: response.data.result.fulfillment.speech,
-                      attachments: [
-                        {
-                          text: "Reminder to " + response.data.result.parameters.subject + " on " + response.data.result.parameters.date + ", correct?",
-                          fallback: "You could not confirm your meeting",
-                          callback_id: "wopr_game",
-                          color: "#3AA3E3",
-                          attachment_type: "default",
-                          actions: [
-                            {
-                              name: "confim",
-                              text: "Yes",
-                              type: "button",
-                              value: "yes"
-                            },
-                            {
-                              name: "confirm",
-                              text: "Cancel",
-                              type: "button",
-                              value: "cancel"
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                    web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
-                      // if (err) {
-                      //   console.log('Error:', err);
-                      // } else {
-                      //   console.log('Message sent interactive: ', res);
-                      // }
-                    })
-                  }).catch(function (error) {
-                    console.log('uh oh' + error);
-                  });
+                  foundUser.channel = message.channel
                 }
+                foundUser.save()
+                .then(resp2 => {
+                  var interactive = {
+                    text: response.data.result.fulfillment.speech,
+                    attachments: [
+                      {
+                        text: "Reminder to " + response.data.result.parameters.subject + " on " + response.data.result.parameters.date + ", correct?",
+                        fallback: "You could not confirm your meeting",
+                        callback_id: "wopr_game",
+                        color: "#3AA3E3",
+                        attachment_type: "default",
+                        actions: [
+                          {
+                            name: "confim",
+                            text: "Yes",
+                            type: "button",
+                            value: "yes"
+                          },
+                          {
+                            name: "confirm",
+                            text: "Cancel",
+                            type: "button",
+                            value: "cancel"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                  web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+                    // if (err) {
+                    //   console.log('Error:', err);
+                    // } else {
+                    //   console.log('Message sent interactive: ', res);
+                    // }
+                  })
+                }).catch(function (error) {
+                  console.log('uh oh' + error);
+                });
               })
             } else if (response.data.result.action === 'addMeeting') {
               console.log('PARAMSSS', response.data.result.parameters)
@@ -408,135 +420,135 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                           invitee: pendingInvitees.slice(0, pendingInvitees.length - 1),
                           time: response.data.result.parameters.time
                         });
-                        foundUser.channel = message.channel;
-                        foundUser.save()
-                        .then(resp2 => {
+                        foundUser.channel = message.channel
+                      }
+                      foundUser.save()
+                      .then(resp2 => {
 
-                          // CONFLICTS
-                          if (conflict) {
+                        // CONFLICTS
+                        if (conflict) {
 
-                            console.log('CONFLICT!!! CHANGE TIME');
-                            var aDay = 86400000;
-                            var now = new Date().getTime();
-                            var nextMidnight = now - now%aDay;
-                            var halfHour = aDay/48;
-                            var available = [];
-                            var count = 0;
+                          console.log('CONFLICT!!! CHANGE TIME');
+                          var aDay = 86400000;
+                          var now = new Date().getTime();
+                          var nextMidnight = now - now%aDay;
+                          var halfHour = aDay/48;
+                          var available = [];
+                          var count = 0;
 
-                            while( count < 10 ) {
-                              var dayCount = 0;
-                              nextMidnight += aDay;
-                              var aDayTimes = [];
-                              _.range(8,21).forEach(hour => {
-                                aDayTimes.push({start: nextMidnight+hour*60*60*1000, end: nextMidnight+hour*60*60*1000+halfHour});
-                                aDayTimes.push({start: nextMidnight+hour*60*60*1000+halfHour, end: nextMidnight+(hour+1)*60*60*1000});
-                              })
-                              while (dayCount < 3) {
-                                for (var i in aDayTimes) {
-                                  var slot = aDayTimes[i];
-                                  for (var j in events) {
-                                    if (!((slot.start > new Date(events[j].start).getTime() && new Date(events[j].end).getTime()) || (slot.end > new Date(events[j].start).getTime() && slot.start < new Date(events[j].end).getTime()))) {
-                                      if (dayCount < 3 && count < 10) {
-                                        console.log('ONE MORE SLOT', new Date(slot.start));
-                                        available.push(slot);
-                                        dayCount++;
-                                        count++;
-                                        break;
-                                      }
+                          while( count < 10 ) {
+                            var dayCount = 0;
+                            nextMidnight += aDay;
+                            var aDayTimes = [];
+                            _.range(8,21).forEach(hour => {
+                              aDayTimes.push({start: nextMidnight+hour*60*60*1000, end: nextMidnight+hour*60*60*1000+halfHour});
+                              aDayTimes.push({start: nextMidnight+hour*60*60*1000+halfHour, end: nextMidnight+(hour+1)*60*60*1000});
+                            })
+                            while (dayCount < 3) {
+                              for (var i in aDayTimes) {
+                                var slot = aDayTimes[i];
+                                for (var j in events) {
+                                  if (!((slot.start > new Date(events[j].start).getTime() && new Date(events[j].end).getTime()) || (slot.end > new Date(events[j].start).getTime() && slot.start < new Date(events[j].end).getTime()))) {
+                                    if (dayCount < 3 && count < 10) {
+                                      console.log('ONE MORE SLOT', new Date(slot.start));
+                                      available.push(slot);
+                                      dayCount++;
+                                      count++;
+                                      break;
                                     }
                                   }
-                                  if (count === 10) dayCount = 3;
                                 }
+                                if (count === 10) dayCount = 3;
                               }
-                              console.log('new day')
                             }
+                            console.log('new day')
+                          }
 
-                            console.log('A DAY', available);
-                            var options = [];
-                            var options = [];
-                            available.forEach(time => {
-                              options.push({
-                                text: new Date(time.start).toLocaleString('en-US', { timeZone: "UTC" }),
-                                value: new Date(time.start).toLocaleString('en-US', { timeZone: "UTC" })
-                              })
+                          console.log('A DAY', available);
+                          var options = [];
+                          var options = [];
+                          available.forEach(time => {
+                            options.push({
+                              text: new Date(time.start).toLocaleString('en-US', { timeZone: "UTC" }),
+                              value: new Date(time.start).toLocaleString('en-US', { timeZone: "UTC" })
                             })
-                            options.push({text: 'Cancel meeting', value: 'cancel'})
-                            var dropDown = {
-                              text: "When would you like to meet?",
-                              response_type: "in_channel",
-                              attachments: [{
-                                text: "Choose another time^",
-                                fallback: "Meeting cancelled.",
+                          })
+                          options.push({text: 'Cancel meeting', value: 'cancel'})
+                          var dropDown = {
+                            text: "When would you like to meet?",
+                            response_type: "in_channel",
+                            attachments: [{
+                              text: "Choose another time^",
+                              fallback: "Meeting cancelled.",
+                              color: "#3AA3E3",
+                              attachment_type: "default",
+                              callback_id: "game_selection",
+                              actions: [{
+                                name: "time_list",
+                                text: "Pick a time...",
+                                type: "select",
+                                options: options
+                              }]
+                            }]
+                          }
+
+                          web.chat.postMessage(message.channel, "Time conflict!", dropDown, function(err, res) {
+                            if (err) {
+                              console.log('ERROR', err);
+                            } else {
+                              console.log('DROPDOWN SENT', res);
+                            }
+                          })
+
+                        } else {
+                          var parseList = JSON.parse(resp2.pending).invitee
+                          var inviteeList = parseList.join(', ')
+                          if (response.data.result.parameters.subject){
+                            var text = `Meeting with ${inviteeList} to ${response.data.result.parameters.subject} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
+                          } else {
+                            var text = `Meeting with ${inviteeList} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
+                          }
+
+                          var interactive = {
+                            text: response.data.result.fulfillment.speech,
+                            attachments: [
+                              {
+                                text: text,
+                                fallback: "You could not confirm your meeting",
+                                callback_id: "wopr_game",
                                 color: "#3AA3E3",
                                 attachment_type: "default",
-                                callback_id: "game_selection",
-                                actions: [{
-                                  name: "time_list",
-                                  text: "Pick a time...",
-                                  type: "select",
-                                  options: options
-                                }]
-                              }]
-                            }
-
-                            web.chat.postMessage(message.channel, "Time conflict!", dropDown, function(err, res) {
-                              if (err) {
-                                console.log('ERROR', err);
-                              } else {
-                                console.log('DROPDOWN SENT', res);
+                                actions: [
+                                  {
+                                    name: "confim",
+                                    text: "Yes",
+                                    type: "button",
+                                    value: "yes"
+                                  },
+                                  {
+                                    name: "confirm",
+                                    text: "Cancel",
+                                    type: "button",
+                                    value: "cancel"
+                                  }
+                                ]
                               }
-                            })
-
-                          } else {
-                            var parseList = JSON.parse(resp2.pending).invitee
-                            var inviteeList = parseList.join(', ')
-                            if (response.data.result.parameters.subject){
-                              var text = `Meeting with ${inviteeList} to ${response.data.result.parameters.subject} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
-                            } else {
-                              var text = `Meeting with ${inviteeList} on ${response.data.result.parameters.date} at ${response.data.result.parameters.time}, correct?`
-                            }
-
-                            var interactive = {
-                              text: response.data.result.fulfillment.speech,
-                              attachments: [
-                                {
-                                  text: text,
-                                  fallback: "You could not confirm your meeting",
-                                  callback_id: "wopr_game",
-                                  color: "#3AA3E3",
-                                  attachment_type: "default",
-                                  actions: [
-                                    {
-                                      name: "confim",
-                                      text: "Yes",
-                                      type: "button",
-                                      value: "yes"
-                                    },
-                                    {
-                                      name: "confirm",
-                                      text: "Cancel",
-                                      type: "button",
-                                      value: "cancel"
-                                    }
-                                  ]
-                                }
-                              ]
-                            }
-                            web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
-                              // if (err) {
-                              //   console.log('Error:', err);
-                              // } else {
-                              //   console.log('Message sent interactive: ', res);
-                              // }
-                            })
+                            ]
+                          }
+                          web.chat.postMessage(message.channel, response.data.result.fulfillment.speech, interactive, function(err, res) {
+                            // if (err) {
+                            //   console.log('Error:', err);
+                            // } else {
+                            //   console.log('Message sent interactive: ', res);
+                            // }
+                          })
 
 
-                          // }).catch(function (error) {
-                          //   console.log('uh oh' + error);
-                          // });
-                        } // end userFindOne
-                      })
-                    }
+                        // }).catch(function (error) {
+                        //   console.log('uh oh' + error);
+                        // });
+                      } // end userFindOne
+                    })
                   })
                 }).catch(function(err) {console.log('BAD! ', err)})
               })

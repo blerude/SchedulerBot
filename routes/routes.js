@@ -182,6 +182,7 @@ router.post('/interactive', (req, res) => {
       } else {
         var cancel = true;
       }
+      console.log('CHANELLLLL')
       new Meeting({
         subject: pending.subject,
         date: pending.date,
@@ -309,6 +310,8 @@ router.post('/interactive', (req, res) => {
           }
         })
       }
+      messager.pending = '';
+      messager.save();
     }
   })
 })
