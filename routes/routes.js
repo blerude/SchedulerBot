@@ -20,58 +20,53 @@ var oauth2Client = new OAuth2(
   'http://localhost:3000/googleauth/callback'
 );
 
+// Adds event to the calendar
 var addEvent = (subject, invitees, start, end) => {
   var attendees = [];
-  console.log('INPUT', invitees);
+  // Get all the emails for every invitee
   var emailsPromise = invitees.map(username => {
-    console.log('USERNAME', username);
     return User.findOne({ slackRealName: username }).exec()
   })
   Promise.all(emailsPromise)
-    .then(users => {
-      users.forEach(user => {
-        console.log('FOUND USER', user.slackEmail);
-        attendees.push({ email: user.slackEmail });
-      })
-      console.log('ATTENDEES EMAIl', attendees);
-
-      var event = {
-        summary: subject,
-        // location: '800 Howard St., San Francisco, CA 94103',
-        // description: 'A chance to hear more about Google\'s developer products.',
-        start: {
-          dateTime: new Date(start)
-          // timeZone: 'America/New_York'
-        },
-        end: {
-          dateTime: new Date(end)
-          // timeZone: 'America/New_York'
-        },
-        attendees: attendees
-      };
-
-      var calendar = google.calendar('v3');
-      calendar.events.insert({
-        auth: oauth2Client,
-        calendarId: 'primary',
-        resource: event,
-      }, function(err, e) {
-        if (err) {
-          console.log('ERROR4', err);
-          return;
-        }
-        console.log('Event created: %s', e.htmlLink);
-      });
+  .then(users => {
+    // Add emails to a list of attendees
+    users.forEach(user => {
+      attendees.push({ email: user.slackEmail });
     })
-    .catch(err => {
-      console.log('ERROR5', err);
-    })
-  }
 
+    // Create event
+    var event = {
+      summary: subject,
+      start: {
+        dateTime: new Date(start)
+      },
+      end: {
+        dateTime: new Date(end)
+      },
+      attendees: attendees
+    };
 
+    // Submit event to Google Calendar
+    var calendar = google.calendar('v3');
+    calendar.events.insert({
+      auth: oauth2Client,
+      calendarId: 'primary',
+      resource: event,
+    }, function(err, e) {
+      if (err) {
+        console.log('Error inserting the Google calendar event', err);
+        return;
+      }
+    });
+  })
+  .catch(err => {
+    console.log('Email promise chain error', err);
+  })
+}
 
+// Google authorization route
 router.get('/googleoauth', (req, res) => {
-  console.log('ID', process.env.GOOGLE_CLIENT_ID);
+  // Generate the link for users to click on in order to initiate authentication
   var url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
@@ -88,16 +83,12 @@ router.get('/googleoauth', (req, res) => {
       invitees: req.query.invitees
     }))
   });
-  console.log('URL', url);
   res.redirect(url);
 })
 
 router.get('/googleauth/callback', (req, res) => {
-  // console.log('AFTER FUNCTION', JSON.parse(decodeURIComponent(req.query.state)));
-
+  // If no state has been set, initiate event sign up
   if (!req.query.state) {
-    console.log('BEFORE PARSE', req.query.tokens);
-    console.log('AUTHORIZED', JSON.parse(req.query.tokens));
     oauth2Client.setCredentials(JSON.parse(req.query.tokens));
     if (req.query.time) {
       startDate = new Date(req.query.date + 'T' + req.query.time + '-07:00').getTime();
@@ -113,51 +104,55 @@ router.get('/googleauth/callback', (req, res) => {
     }
     addEvent(sub, invitees, startDate, endDate);
     res.send('Event added!');
-  } else {
-    console.log('NOTAUTHORIZED', JSON.parse(decodeURIComponent(req.query.state)));
+  } else { // Begin authorization process in order to create event
     oauth2Client.getToken(req.query.code, (err, tokens) => {
       // tokens contains an access_token and an optional refresh_token
       if (!err) {
-        console.log('TOKEN', tokens);
         oauth2Client.setCredentials(tokens);
+        // Find the correct user
         User.findOne({ slackId: JSON.parse(decodeURIComponent(req.query.state)).auth_id })
           .then(user => {
-            console.log('FOUND USER!', user);
+            // Create their tokens
             user.tokens = tokens;
             user.save()
-              .then(user => {
-                console.log('SAVED', user);
-                var state = JSON.parse(decodeURIComponent(req.query.state));
-                var startDate = 0;
-                var endDate = 0;
-                var invitees = [];
-                if (state.time !== undefined) {
-                  startDate = new Date(state.date + 'T' + state.time + '-07:00').getTime();
-                  endDate = startDate + (30 * 60 * 1000);
-                  invitees = state.invitees.split('_').map(sb => sb.split('0').join(' '));
-                  res.send('You are authorized! Now go back to Slack and schdule the meeting with your bot! ^');
-                } else {
-                  startDate = new Date(state.date + 'T00:00:00-07:00').getTime();
-                  endDate = startDate + (24 * 60 * 60 * 1000);
-                  addEvent(state.subject, invitees, startDate, endDate);
-                  res.redirect('https://calendar.google.com/calendar');
-                }
-              })
+            .then(user => {
+              var state = JSON.parse(decodeURIComponent(req.query.state));
+              var startDate = 0;
+              var endDate = 0;
+              var invitees = [];
+              // Send a notice that the user can now go back to invite others
+              if (state.time !== undefined) {
+                startDate = new Date(state.date + 'T' + state.time + '-07:00').getTime();
+                endDate = startDate + (30 * 60 * 1000);
+                invitees = state.invitees.split('_').map(sb => sb.split('0').join(' '));
+                res.send('You are authorized! Now go back to Slack and schdule the meeting with your bot! ^');
+              } else {
+                startDate = new Date(state.date + 'T00:00:00-07:00').getTime();
+                endDate = startDate + (24 * 60 * 60 * 1000);
+                addEvent(state.subject, invitees, startDate, endDate);
+                res.redirect('https://calendar.google.com/calendar');
+              }
+            })
+            .catch(err => {
+              console.log('Error saving tokens', err)
+            })
           })
           .catch(err => {
-            console.log('ERROR6', err);
+            console.log('Error finding user to authorize', err);
           })
         }
     });
   }
 })
 
+// Route for dealing with responses to interactive messages
 router.post('/interactive', (req, res) => {
-  console.log('IN INTERACTIVE');
+  // Parse the payload in order to determine user response
   var string = JSON.parse(req.body.payload);
-  console.log('STRINGGG', string);
+  // If rescheduling, update the new time with the selected value
   if (string.actions[0].selected_options) {
     var newMeet = string.actions[0].selected_options[0].value;
+    // Ensure that the meeting was not cancelled
     if (newMeet !== 'cancel') {
       var day = new Date(newMeet);
       var offset = day.getTimezoneOffset()*60*1000;
@@ -165,41 +160,15 @@ router.post('/interactive', (req, res) => {
     }
   }
 
-  console.log(string)
+  // Find the user
   User.findOne({slackId: string.user.id}, function(err, messager) {
+    // If the meeting was cancelled, do so and refresh pending
     if (string.actions[0].value === 'cancel' || newMeet === 'cancel') {
-      console.log('CANCELLED!')
       res.send('Scheduler cancelled');
       messager.pending = '';
       messager.save();
-    } else if (string.actions[0].value === 'scheduleMeeting' || string.actions[0].value === 'cancelIn2Hours') {
-      res.send("We'll check in 2 hours");
-      console.log('MESSANGERE', messager)
-      var pending = JSON.parse(messager.pending)
-
-      if (string.actions[0].value === 'scheduleMeeting') {
-        var cancel = false
-      } else {
-        var cancel = true;
-      }
-      new Meeting({
-        subject: pending.subject,
-        date: pending.date,
-        time: pending.time,
-        invitees: pending.invitee,
-        location: '',
-        length: '',
-        created: false,
-        createdAt: new Date().getTime() - 7*60*60*1000,
-        cancelIn2Hours: cancel,
-        user: messager._id,
-        channel: messager.channel
-      }).save((err, saved) => {
-        messager.pending = '';
-        messager.save();
-      });
-
     } else if (string.actions[0].value === 'sendRequest') {
+      // Generate next prompt, asking users what to do if no response has been received in two hours
       var prompt2 = {
         text: "2 HOUR CONFIRMATION",
         attachments: [
@@ -227,43 +196,61 @@ router.post('/interactive', (req, res) => {
         ]
       }
 
-      web.chat.postMessage(string.channel.id, "2 hour", prompt2, function(err, res) {
-        if (err) {
-          console.log('ERROR1', err);
-        } else {
-          console.log('SCHEDULE 2 SENT', res);
-        }
-      })
+      web.chat.postMessage(string.channel.id, "Action Confirmation", prompt2)
 
       var pending = JSON.parse(messager.pending)
-      console.log('INVITEES', pending);
       pending.invitee.forEach(inv => {
         var id = inv.slice(2);
         User.findOne({slackId: id}, function(err, user) {
-          if (err) console.log('ERROR2', err);
+          if (err) console.log('Error finding user to invite', err);
           else {
-            web.chat.postMessage('@' + user.slackUsername, `Please authorize your Google Calendar for a meeting: http://localhost:3000/googleoauth?auth_id=${id}`, function(err, res) {
-              if (err) {
-                console.log('ERROR3', err);
-              } else {
-                console.log('AUTH TO INVITEE SENT', res);
-              }
-            })
+            web.chat.postMessage('@' + user.slackUsername, `Please authorize your Google Calendar for a meeting: http://localhost:3000/googleoauth?auth_id=${id}`)
           }
         })
       })
-      res.send('HEYY PROMPT HAS BEEN MADE');
+      res.send('We reached out to your invitees.');
+    } else if (string.actions[0].value === 'scheduleMeeting' || string.actions[0].value === 'cancelIn2Hours') {
+      // Response to the prompts to check back in two hours
+      res.send("Meeting will be updated within two hours");
+      var pending = JSON.parse(messager.pending)
 
+      if (string.actions[0].value === 'scheduleMeeting') {
+        var cancel = false
+      } else {
+        var cancel = true;
+      }
+      // Create a new pending meeting
+      new Meeting({
+        subject: pending.subject,
+        date: pending.date,
+        time: pending.time,
+        invitees: pending.invitee,
+        location: '',
+        length: '',
+        created: false,
+        createdAt: new Date().getTime() - 7*60*60*1000,
+        cancelIn2Hours: cancel,
+        user: messager._id,
+        channel: messager.channel
+      }).save((err, saved) => {
+        if (err) {
+          console.log("Error saving pending meeting", err)
+        } else {
+          // Clear pending
+          messager.pending = '';
+          messager.save();
+        }
+      });
     } else {
-      console.log('MESSAGER', messager);
+      // Confirmation message
       var pending = JSON.parse(messager.pending)
       if (newDate) {
         pending.date = newDate[0]
         pending.time = newDate[1].slice(0, 8)
       }
-      console.log('saving...')
+      // If saving a meeting...
       if (pending.invitee) {
-        console.log('...a meeting');
+        // Create new meeting
         new Meeting({
           subject: pending.subject,
           date: pending.date,
@@ -276,15 +263,15 @@ router.post('/interactive', (req, res) => {
           channel: messager.channel
         }).save(function(err, savedMeeting) {
           if (err) {
-            console.log(err)
+            console.log("Error saving meeting", err)
           } else {
-            console.log('CONFIRMED MEETING', savedMeeting);
+            // Confirm it and create message
             var formatSubject = pending.subject.split(' ').join('_')
             var stringInvitees = pending.invitee.map(inv => {
               return inv.split(' ').join('0');
             })
-            console.log('invitee string' + stringInvitees)
             var formatInvitees = stringInvitees.join('_')
+            // Make sure user is authenticated
             if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
               res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}&time=${pending.time}&invitees=${formatInvitees}&tokens=${JSON.stringify(messager.tokens)}`);
             } else {
@@ -293,22 +280,27 @@ router.post('/interactive', (req, res) => {
           }
         })
       } else {
-        console.log('...a reminder')
+        // Save a reminder
         new Reminder({
           subject: pending.subject,
           date: pending.date,
           user: messager._id,
           channel: messager.channel
         }).save(function(err) {
-          console.log('CONFIRMED REMINDER', pending);
-          var formatSubject = pending.subject.split(' ').join('_');
-          if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
-            res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}&tokens=${JSON.stringify(messager.tokens)}`);
+          if (err) {
+            console.log("Error saving reminder", err)
           } else {
-            res.send(`Oops! You need to authorize your Google Calendar first:: http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}`);
+            var formatSubject = pending.subject.split(' ').join('_');
+            // Make sure user is authenticated
+            if (messager.tokens && messager.tokens.expiry_date > new Date().getTime()) {
+              res.redirect(`/googleauth/callback?subject=${formatSubject}&date=${pending.date}&tokens=${JSON.stringify(messager.tokens)}`);
+            } else {
+              res.send(`Oops! You need to authorize your Google Calendar first:: http://localhost:3000/googleoauth?auth_id=${string.user.id}&subject=${formatSubject}&date=${pending.date}`);
+            }
           }
         })
       }
+      // Clear pending
       messager.pending = '';
       messager.save();
     }
